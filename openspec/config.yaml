@@ -1,0 +1,111 @@
+schema: spec-driven
+
+context: |
+  ## Project: SpeedyPeng
+  A browser-based Chinese companion-raising game (陪伴养成) inspired by Tamagotchi and Travel Frog.
+  The player nurtures a Q-style chibi character by feeding, dressing, and sending them on outings.
+  Targeted at fans of a real-world idol/character; special events mirror real-life dates (birthdays, concerts).
+
+  ## Tech Stack
+  - Pure vanilla JS (ES2020, no framework, no build step)
+  - HTML5 + CSS3 (flexbox/grid, CSS animations, backdrop-filter)
+  - Single-page app: index.html + style.css + game.js
+  - Served via `python3 -m http.server` for local dev; deployable as static files
+  - State persisted in localStorage (key: `speedypeng_v2`, JSON-serialised `G` object)
+  - No external dependencies, no npm packages at runtime
+
+  ## File Structure
+  SpeedyPeng/
+  ├── index.html          # All DOM structure; no JS logic
+  ├── style.css           # All styles; Chinese warm-room aesthetic
+  ├── game.js             # All game logic (single file, ~600 lines)
+  └── assets/
+      ├── characters/     # Transparent PNG sprites, 300×500px
+      │   ├── char_normal.png   ← currently the only existing sprite
+      │   ├── char_happy.png    ← pending user generation
+      │   ├── char_cold.png     ← pending
+      │   ├── char_sad.png      ← pending
+      │   ├── char_concert.png  ← pending
+      │   ├── char_birthday.png ← pending
+      │   └── char_casual.png   ← pending
+      ├── food/           # Transparent PNG icons, 80×80px (all pending)
+      └── ui/             # bg_room_dawn.png (390×844px), nav icons, stat icons (all pending)
+
+  ## Game State (`G` object in localStorage)
+  mood:              0–100   Drives expression + outing eligibility (≥40 to go out)
+  hunger:            0–100   Depletes every tick; low hunger drains mood faster
+  energy:            0–100   Recovers every tick; must be ≥50 to go out
+  bond:              0–100   Unlocks outfits and hidden content; never decays (acts as major level system)
+  coins:             int     Currency for buying food; earned from tasks/outing
+  outfit:            string  Currently equipped outfit id
+  lastTick:          ms      Unix timestamp of last tick (for offline decay calc)
+  outingCooldown:    ms      Unix timestamp when next outing is available (6-min real = 6 game-hours)
+  memories:          array   Short stories saved from outing events (shown in 相册) (to be implemented in future version, not an required feature)
+  diary:             array   Auto-written log entries (shown in 成长日记)
+  unlockedOutfits:   array   Outfit ids the player has unlocked
+  loginStreak:       int     Consecutive daily login count
+  lastLogin:         string  Last login date as toLocaleDateString('zh-CN')
+  musicOn:           bool    Music toggle state
+  totalFeeds:        int     Lifetime feed count (used for task milestones)
+  activeEvent:       string|null  Currently active special event id (null if none)
+  seenEventIds:      array   Event ids already shown banner for (prevents repeat popups)
+  consumedEventFoods:array   Event food ids consumed this activation
+
+  ## Tick System
+  TICK_MS = 60_000 (60 real seconds = 1 game-hour)
+  Per tick: hunger −5, mood −2 (or −5 if hunger<30), energy +5 (capped 100)
+  Offline decay: applied on load, capped at MAX_OFFLINE_TICKS = 48
+
+  ## Core Data Constants (all in game.js)
+  FOODS      — 9 items: 3 regular, 2 liked (+mood+5), 2 disliked (-mood-1), 2 special (event-only)
+  OUTFITS    — 4 items: default (free), casual (bond≥20), birthday (bond≥50), concert (bond≥80)
+  EVENTS     — special date-based events (birthday, concert, new-year); drives event engine
+  DIALOGUES  — 4 mood states × 5 lines
+  CONTEXT_LABELS / MOOD_TAGLINES — flavour text per mood state
+
+  ## UI Layout (matches Chinese companion game aesthetic, ref: 满天星 game screenshot)
+  Top bar:        Avatar circle + char name + ❤ bond value (top-left) | coins (top-right)
+  Sub-top right bar: Hunger | Energy | mood
+  Left sidebar:   📔成长日记
+  Right sidebar:  🎵 music toggle | ❓ help/stats
+  Center stage:   Context label (mood phrase) → speech bubble → char sprite → mood tagline
+  Bottom nav:     喂食(feeding) | 装扮(outfit)
+  Background:     Character's Room (given by background image)
+  All panels:     Slide-up from bottom with blur backdrop
+  Main Theme Color: Blue #18B7F6, Purple #666BCE, White #D7EEF6
+
+  ## Coding Conventions
+  - All UI mutations go through `renderAll()` — never manipulate DOM directly outside it
+  - State mutations always followed by `saveState()`
+  - Panel open/close managed by `openPanel(name)` / `closePanel()` — single active panel at a time
+  - Emoji fallbacks for all images (onerror handlers); `mix-blend-mode: multiply` on sprites
+  - Chinese UI copy throughout; all user-facing strings in Chinese
+  - No TypeScript, no JSDoc — keep it simple and readable
+  - Prefer `clamp(v, min, max)` over inline Math.min/max chains
+
+  ## Design Principles
+  - Healing / cozy aesthetic (治愈系): warm colours, soft animations, no punishment loops
+  - Offline-friendly: game continues while closed; decay is gentle, capped
+  - Asset-optional: all images have emoji fallbacks so game runs before assets are ready
+  - Single-file logic: keep game.js as one file unless it exceeds ~1000 lines
+  - No backend required: everything runs client-side; state in localStorage only
+
+# Per-artifact rules
+rules:
+  proposal:
+    - Keep under 400 words; focus on player-facing "why", not implementation detail
+    - Always list affected files under Impact
+    - Capability names must be kebab-case and map 1-to-1 to spec subdirectories
+  design:
+    - Must include a Decisions table with at least one "Alternative considered" entry
+    - Always include a Migration Plan section (even if it's just "additive, no migration needed")
+    - Reference the relevant G state fields that will be added or changed
+  specs:
+    - Every requirement must have at least one Scenario using WHEN/THEN format
+    - Scenarios must reference actual function names or DOM element ids where possible
+    - Keep requirements atomic — one behaviour per requirement
+  tasks:
+    - Each task must be completable in under 30 minutes
+    - Group by file: game.js tasks separate from index.html and style.css tasks
+    - Last task group must always be "Verify & Polish" with at least 3 test scenarios
+    - Final task is always "Run /opsx:archive once all tasks are checked off"

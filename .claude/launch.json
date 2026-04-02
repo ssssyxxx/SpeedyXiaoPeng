@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "speedypeng",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server"],
+      "port": 8877,
+      "autoPort": true
+    }
+  ]
+}

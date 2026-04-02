@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>SpeedyPeng</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="game-container">
+
+    <!-- ── Room Background ── -->
+    <div id="bg-room">
+      <!-- Brick wall texture layer -->
+      <!-- <div id="bg-wall"></div> -->
+
+      <!-- Floor -->
+      <!-- <div id="bg-floor"></div> -->
+    </div>
+
+    <!-- ── Top Bar ── -->
+    <div id="top-bar">
+      <div id="avatar-area">
+        <div id="avatar-circle">
+          <img src="assets/characters/char_normal.png" id="avatar-img" alt="avatar"
+               onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'avatar-fallback',textContent:'🐧'}))" />
+        </div>
+        <div id="char-info">
+          <div id="char-name">小企鹅</div>
+          <div id="affection-row"><span id="affection-heart">❤</span> <span id="bond-val">0</span></div>
+        </div>
+      </div>
+      <div id="top-actions">
+        <div id="coin-display">🪙 <span id="coin-val">0</span></div>
+      </div>
+    </div>
+
+    <!-- ── Stat Mini Bar ── -->
+    <div id="stat-mini-bar">
+      <span class="mini-stat">🍚 <span id="mini-hunger-val">0</span></span>
+      <span class="mini-stat">⚡ <span id="mini-energy-val">0</span></span>
+      <span class="mini-stat">🩷 <span id="mini-mood-val">0</span></span>
+    </div>
+
+    <!-- ── Right Sidebar ── -->
+    <div id="right-sidebar">
+      <button class="right-btn" id="btn-music" onclick="toggleMusic()" title="音乐">🎵</button>
+      <button class="right-btn" id="btn-help" title="提示">❓</button>
+    </div>
+
+    <!-- ── Left Sidebar ── -->
+    <div id="left-sidebar">
+      <div class="side-item" onclick="openPanel('diary')">
+        <div class="side-icon-wrap">📔</div>
+        <div class="side-label">成长日记</div>
+      </div>
+    </div>
+
+    <!-- ── Character Stage ── -->
+    <div id="char-stage">
+      <!-- Context label (like "打扮一下吧") -->
+      <div id="context-label"></div>
+
+      <!-- Speech bubble -->
+      <div id="speech-bubble" class="hidden">
+        <span id="speech-text"></span>
+      </div>
+
+      <!-- Character sprite wrapper (handles image fallback gracefully) -->
+      <div id="char-sprite-wrap">
+        <img id="char-sprite"
+             src="assets/characters/char_normal.png"
+             alt=""
+             onclick="interact()" />
+        <div id="char-fallback" class="hidden" onclick="interact()">🐧</div>
+      </div>
+
+      <!-- Mood tagline below character -->
+      <div id="mood-tagline"></div>
+
+      <!-- Ground shadow -->
+      <div id="char-shadow"></div>
+    </div>
+
+    <!-- ── Bottom Nav Plank ── -->
+    <nav id="bottom-nav">
+      <div id="nav-plank">
+        <button class="nav-btn" id="nav-feed" onclick="openPanel('feed')">
+          <div class="nav-icon-bg">
+            <img src="assets/ui/nav_feed.png" class="nav-img"
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='block'"
+                 alt="" />
+            <span class="nav-emoji" style="display:none">🍽</span>
+          </div>
+          <span class="nav-label">喂食</span>
+        </button>
+
+        <button class="nav-btn nav-center" id="nav-chat" onclick="interact()">
+          <div class="nav-icon-bg nav-center-bg">
+            <img src="assets/ui/nav_chat.png" class="nav-img"
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='block'"
+                 alt="" />
+            <span class="nav-emoji" style="display:none">💬</span>
+          </div>
+          <span class="nav-label">聊天</span>
+        </button>
+
+        <button class="nav-btn" id="nav-outfit" onclick="openPanel('outfit')">
+          <div class="nav-icon-bg">
+            <img src="assets/ui/nav_outfit.png" class="nav-img"
+                 onerror="this.style.display='none';this.nextElementSibling.style.display='block'"
+                 alt="" />
+            <span class="nav-emoji" style="display:none">👗</span>
+          </div>
+          <span class="nav-label">装扮</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- ═══ PANELS ═══ -->
+
+    <!-- Stats Panel -->
+    <div id="panel-stats" class="panel-overlay hidden">
+      <div class="panel-card">
+        <div class="panel-header">
+          <span>📊 状态</span>
+          <button class="close-btn" onclick="closePanel()">✕</button>
+        </div>
+        <div class="stats-list">
+          <div class="stat-row">
+            <span class="stat-label">🩷 心情</span>
+            <div class="stat-bar-wrap"><div class="stat-bar" id="bar-mood" style="background:linear-gradient(90deg,#ff6b9d,#ff8cb4)"></div></div>
+            <span class="stat-val" id="val-mood">0</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">🍚 饥饿</span>
+            <div class="stat-bar-wrap"><div class="stat-bar" id="bar-hunger" style="background:linear-gradient(90deg,#ffb347,#ffd080)"></div></div>
+            <span class="stat-val" id="val-hunger">0</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">⚡ 体力</span>
+            <div class="stat-bar-wrap"><div class="stat-bar" id="bar-energy" style="background:linear-gradient(90deg,#56ccf2,#2f80ed)"></div></div>
+            <span class="stat-val" id="val-energy">0</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">🎀 羁绊</span>
+            <div class="stat-bar-wrap"><div class="stat-bar" id="bar-bond" style="background:linear-gradient(90deg,#bb6bd9,#9b51e0)"></div></div>
+            <span class="stat-val" id="val-bond2">0</span>
+          </div>
+          <div class="coin-info">🪙 金币：<strong id="coin-val2">0</strong></div>
+          <div id="outing-status" class="outing-status"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feed Panel -->
+    <div id="panel-feed" class="panel-overlay hidden">
+      <div class="panel-card">
+        <div class="panel-header">
+          <span>🍽️ 投喂</span>
+          <button class="close-btn" onclick="closePanel()">✕</button>
+        </div>
+        <div id="food-grid"></div>
+      </div>
+    </div>
+
+    <!-- Outfit Panel -->
+    <div id="panel-outfit" class="panel-overlay hidden">
+      <div class="panel-card">
+        <div class="panel-header">
+          <span>👗 换装</span>
+          <button class="close-btn" onclick="closePanel()">✕</button>
+        </div>
+        <div id="outfit-grid"></div>
+      </div>
+    </div>
+
+    <!-- Memory / Album Panel -->
+    <div id="panel-memory" class="panel-overlay hidden">
+      <div class="panel-card">
+        <div class="panel-header">
+          <span>📷 相册</span>
+          <button class="close-btn" onclick="closePanel()">✕</button>
+        </div>
+        <div id="memory-list"></div>
+      </div>
+    </div>
+
+    <!-- Diary Panel -->
+    <div id="panel-diary" class="panel-overlay hidden">
+      <div class="panel-card">
+        <div class="panel-header">
+          <span>📔 成长日记</span>
+          <button class="close-btn" onclick="closePanel()">✕</button>
+        </div>
+        <div id="diary-content"></div>
+      </div>
+    </div>
+
+    <!-- Partner Panel -->
+    <div id="panel-partner" class="panel-overlay hidden">
+      <div class="panel-card">
+        <div class="panel-header">
+          <span>🐾 伙伴</span>
+          <button class="close-btn" onclick="closePanel()">✕</button>
+        </div>
+        <div class="coming-soon">敬请期待～<br/><span>先和小企鹅培养感情吧！</span></div>
+      </div>
+    </div>
+
+    <!-- ═══ POPUPS ═══ -->
+
+    <!-- Outing Result Popup -->
+    <div id="popup-outing" class="popup-overlay hidden">
+      <div class="popup-card">
+        <div id="popup-emoji" class="popup-emoji">🚪</div>
+        <div id="popup-title" class="popup-title"></div>
+        <div id="popup-text"  class="popup-text"></div>
+        <div id="popup-rewards" class="popup-rewards"></div>
+        <button class="popup-confirm-btn" onclick="closePopup()">好的～</button>
+      </div>
+    </div>
+
+    <!-- Feed Result Popup (quick inline, not modal) -->
+
+    <!-- Backdrop -->
+    <div id="backdrop" class="hidden" onclick="closePanel()"></div>
+
+    <!-- Toast -->
+    <div id="toast"></div>
+
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>

@@ -41,7 +41,7 @@ context: |
   lastTick:          ms      Unix timestamp of last tick (for offline decay calc)
   outingCooldown:    ms      Unix timestamp when next outing is available (6-min real = 6 game-hours)
   memories:          array   Short stories saved from outing events (shown in 相册) (to be implemented in future version, not an required feature)
-  diary:             array   Auto-written log entries (shown in 成长日记)
+  diary:             array   Auto-written log entries (shown in 小猪日记)
   unlockedOutfits:   array   Outfit ids the player has unlocked
   loginStreak:       int     Consecutive daily login count
   lastLogin:         string  Last login date as toLocaleDateString('zh-CN')
@@ -66,7 +66,7 @@ context: |
   ## UI Layout (matches Chinese companion game aesthetic, ref: 满天星 game screenshot)
   Top bar:        Avatar circle + char name + ❤ bond value (top-left) | coins (top-right)
   Sub-top right bar: Hunger | Energy | mood
-  Left sidebar:   📔成长日记
+  Left sidebar:   📔小猪日记
   Right sidebar:  🎵 music toggle | ❓ help/stats
   Center stage:   Context label (mood phrase) → speech bubble → char sprite → mood tagline
   Bottom nav:     喂食(feeding) | 装扮(outfit)

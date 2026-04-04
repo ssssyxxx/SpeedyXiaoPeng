@@ -19,13 +19,15 @@ const defaultState = {
   outfit:   'default',
   lastTick: Date.now(),
   outingCooldown: 0,
+  outingStartedAt: null,
   memories:  [],
   diary:     [],
   unlockedOutfits: ['default'],
   totalFeeds: 0,
   loginStreak: 0,
   lastLogin: '',
-  musicOn: true,
+  // Daily tasks: reset each day
+  dailyTasks: { date: '', loginClaimed: false, feeds: 0, feedsClaimed: false, dressed: false, dressClaimed: false },
 };
 
 // ─── Global state ──────────────────────────────
@@ -33,6 +35,9 @@ let G = loadState();
 let speechTimer  = null;
 let toastTimer   = null;
 let _lastBgSlot  = null; // tracks current background time slot
+let outingTimer  = null; // countdown interval reference
+let _currentOutingEvent  = null;
+let _currentOutingReward = null;
 
 // ─── Data: Foods ──────────────────────────────
 const FOODS = [
@@ -83,38 +88,57 @@ const MOOD_TAGLINES = {
   sad:    ['需要一个拥抱…', '求投喂…', '心情有点低落'],
 };
 
+// ─── Data: Outing blocked dialogues ──────────
+const OUTING_BLOCKED_DIALOGUES = [
+  '小猪好累，不想出门 😴',
+  '人家今天不想动嘛～',
+  '呜呜，走不动了啦…',
+  '再让我躺一会儿嘛！',
+  '心情不好，不要出门啦',
+  '好累哦，让我休息一下嘛～',
+  '现在不想出去，陪陪我嘛 🥺',
+];
+
+// ─── Data: Outing departure messages ─────────
+const OUTING_DEPARTURE_MESSAGES = [
+  '出门啦，帮我照看一下两只猫猫 🐱',
+  '去逛逛，一会儿回来～',
+  '出去买点东西，很快的！',
+  '外面天气不错，去透透气～',
+  '溜出去一下，别找我哦 🎵',
+  '出门啦，记得等我回来！',
+  '去外面走走，马上就回来～',
+];
+
 // ─── Data: Outing events ──────────────────────
-const OUTING_EVENTS = {
-  common: [
-    { text:'在街角遇见了一只流浪猫，喂了它小鱼干，它蹭了蹭我就跑走了。', emoji:'🐱' },
-    { text:'买了杯奶茶，喝到一半发现是半糖，刚好。', emoji:'🧋' },
-    { text:'路过书店翻了翻新书，没买，但很满足。', emoji:'📚' },
-    { text:'坐公交时，旁边小朋友在画画，画得很好看，跟他比了一个大拇指。', emoji:'🚌' },
-    { text:'在超市碰到了打折，买了一堆零食，背包沉甸甸的。', emoji:'🛒' },
-  ],
-  story: [
-    { text:'在公园找到一张没人要的素描，画的是一棵老树。带回来了，一直在想那棵树是谁画的。', emoji:'🌳' },
-    { text:'下雨了，躲进一家没去过的小店，老板泡了碗热茶，坐了很久，聊了很多，最后忘了问店名。', emoji:'🍵' },
-    { text:'在旧货市场发现一盘旧磁带，不知道是谁的，带回来了。想找个播放机听一听。', emoji:'📼' },
-    { text:'路过一所小学，下课铃声响起，孩子们冲出来的声音，把我也一起卷进了那个夏天。', emoji:'🏫' },
-  ],
-  rare: [
-    { text:'意外遇见了好久不见的老朋友，聊了整个下午，拿到了一张合照。', emoji:'👫' },
-    { text:'在街头驻足听了一位街头歌手表演，结束后他把手写歌词送给了我。', emoji:'🎸' },
-    { text:'找到了传说中的老字号小吃，排了一小时队，值了，真的值了。', emoji:'🍜' },
-  ],
-};
+const OUTING_EVENTS = [
+  // Common events (text-only)
+  { id:'c1', rarity:'common', text:'在街角遇见了一只流浪猫，喂了它小鱼干，它蹭了蹭我就跑走了。' },
+  { id:'c2', rarity:'common', text:'买了杯奶茶，喝到一半发现是半糖，刚好。' },
+  { id:'c3', rarity:'common', text:'路过书店翻了翻新书，没买，但心里很满足。' },
+  { id:'c4', rarity:'common', text:'坐公交时，旁边小朋友在画画，画得很好看，我们比了一个大拇指。' },
+  { id:'c5', rarity:'common', text:'在超市碰到了打折，买了一堆零食，背包沉甸甸的。' },
+  { id:'c6', rarity:'common', text:'在公园找到一张没人要的素描，画的是一棵老树，带回来了。' },
+  { id:'c7', rarity:'common', text:'下雨了，躲进一家没去过的小店，老板泡了碗热茶，坐了很久。' },
+  { id:'c8', rarity:'common', text:'路过一所小学，下课铃声响起，孩子们冲出来，把我也卷进了那个夏天。' },
+  { id:'c9', rarity:'common', text:'在旧货市场发现了一盘旧磁带，不知道是谁的，带回来了。' },
+  // Rare events (text + user-provided img)
+  { id:'r1', rarity:'rare', text:'意外遇见了好久不见的老朋友，聊了整个下午，还拿到了一张合照。', img:'assets/outing/rare_friends.jpg' },
+  { id:'r2', rarity:'rare', text:'在街头驻足听了一位街头歌手表演，结束后他把手写歌词送给了我。', img:'assets/outing/rare_singer.jpg' },
+  { id:'r3', rarity:'rare', text:'找到了传说中的老字号小吃，排了一小时队，值了，真的值了。', img:'assets/outing/rare_food.jpg' },
+];
 
 // ══════════════════════════════════════════════
 //   INIT
 // ══════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', () => {
+  resetDailyTasksIfNeeded();
   applyOfflineDecay();
   handleDailyLogin();
   buildFoodGrid();
   buildOutfitGrid();
   buildMemoryList();
-  buildDiary();
+  renderDiaryPanel();
   renderAll();
   updateBackground();
 
@@ -207,7 +231,8 @@ function handleDailyLogin() {
   G.coins += bonus;
   G.bond   = clamp(G.bond + 3, 0, 100);
 
-  addDiaryEntry(`签到第${G.loginStreak}天，获得${bonus}金币。`);
+  // Mark login task as claimable (not auto-claimed — user claims in tasks panel)
+  G.dailyTasks.loginClaimed = false;
   saveState();
   setTimeout(() => toast(msg), 800);
 }
@@ -222,7 +247,6 @@ function checkBondUnlocks(silent = false) {
       if (!silent) {
         toast(`✨ 解锁新服装：${o.name}！`);
         buildOutfitGrid();
-        addDiaryEntry(`达成羁绊${o.unlockBond}，解锁了「${o.name}」！`);
       }
     }
   });
@@ -250,9 +274,7 @@ function feedFood(foodId) {
   G.mood    = clamp(G.mood   + food.mood,   0, 100);
   G.bond    = clamp(G.bond   + food.bond,   0, 100);
   G.totalFeeds++;
-
-  // Daily task: feed reward
-  if (G.totalFeeds % 3 === 0) { G.coins += 30; toast('投喂3次任务完成！+30金币'); }
+  G.dailyTasks.feeds = (G.dailyTasks.feeds || 0) + 1;
 
   saveState();
   checkBondUnlocks();
@@ -263,7 +285,6 @@ function feedFood(foodId) {
   if (food.type === 'liked') {
     animSprite('bounce');
     showSpeech(`${food.emoji || '😋'} 好吃！最喜欢了～`);
-    addDiaryEntry(`吃到了最爱的${food.name}，心情超好！`);
   } else if (food.type === 'disliked') {
     animSprite('shake');
     showSpeech(`${food.emoji || '😣'} 呜…不喜欢这个…`);
@@ -286,7 +307,7 @@ function equipOutfit(outfitId) {
   if (G.outfit === outfitId) { closePanel(); return; }
 
   G.outfit  = outfitId;
-  G.coins  += 10; // daily task reward
+  G.dailyTasks.dressed = true;
   saveState();
   renderAll();
   buildOutfitGrid();
@@ -296,62 +317,151 @@ function equipOutfit(outfitId) {
 }
 
 // ──────────────────────────────────────────────
-//   OUTING (挖宝)
+//   OUTING (外出)
 // ──────────────────────────────────────────────
-function triggerOuting() {
-  if (G.energy < 50) { toast('体力不足（需要 ≥ 50）⚡'); return; }
-  if (G.mood   < 40) { toast('心情太低落了（需要 ≥ 40）😢'); return; }
-  const now = Date.now();
-  if (now < G.outingCooldown) {
-    const mins = Math.ceil((G.outingCooldown - now) / 60_000);
-    toast(`冷却中，还需 ${mins} 分钟`);
+function handleOutingClick() {
+  if (G.energy < 50 || G.mood < 40) {
+    // Priority: low energy > low mood when both fail
+    showOutingBlocked(G.energy < 50 ? 'tired' : 'mood');
     return;
   }
+  startOuting();
+}
 
-  G.energy          -= 30;
-  // 6 minutes real = 6 game-hours cooldown
-  G.outingCooldown   = now + 6 * 60_000;
+function showOutingBlocked(reason) {
+  const text = randomFrom(OUTING_BLOCKED_DIALOGUES);
+  const dialog = document.getElementById('outing-blocked-dialog');
+  document.getElementById('outing-blocked-text').textContent = text;
+  dialog.classList.remove('hidden');
 
-  const roll = Math.random();
-  let event, title, tier;
+  // Pick sprite: tired (体力不足) vs pouty (心情不足)
+  const spriteName = reason === 'tired' ? 'char_pouty_tired.png' : 'char_pouty_mood.png';
+  const sprite = document.getElementById('char-sprite');
+  const testImg = new Image();
+  testImg.onload = () => { sprite.src = `assets/characters/${spriteName}`; };
+  testImg.src = `assets/characters/${spriteName}`;
 
-  if (roll < 0.60) {
-    event = randomFrom(OUTING_EVENTS.common);
-    title = '外出归来';
-    tier  = 'common';
-  } else if (roll < 0.90) {
-    event = randomFrom(OUTING_EVENTS.story);
-    title = '📖 小故事';
-    tier  = 'story';
-    G.memories.unshift({ date: todayStr(), text: event.text });
-    buildMemoryList();
-    addDiaryEntry(`外出回来，带回了一段故事。`);
+  setTimeout(() => {
+    dialog.classList.add('hidden');
+    renderAll(); // restore sprite to mood-based expression
+  }, 2000);
+}
+
+function startOuting() {
+  G.energy = clamp(G.energy - 20, 0, 100);
+  G.outingStartedAt = Date.now();
+  saveState();
+
+  // Hide character
+  document.getElementById('char-sprite-wrap').classList.add('char-hidden');
+
+  // Show countdown text with fade-in
+  const overlay = document.getElementById('outing-overlay');
+  const countdownEl = document.getElementById('outing-countdown');
+  let seconds = 20;
+  countdownEl.textContent = `${seconds} 小猪出门中....`;
+  overlay.classList.remove('hidden');
+  requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('outing-visible')));
+
+  outingTimer = setInterval(() => {
+    seconds--;
+    countdownEl.textContent = `${seconds} 小猪出门中....`;
+    if (seconds <= 0) {
+      clearInterval(outingTimer);
+      outingTimer = null;
+      finishOuting();
+    }
+  }, 1000);
+}
+
+function finishOuting() {
+  const overlay   = document.getElementById('outing-overlay');
+  const spriteWrap = document.getElementById('char-sprite-wrap');
+
+  // Fade out overlay, fade in character simultaneously
+  overlay.classList.remove('outing-visible');
+  spriteWrap.classList.remove('char-hidden');
+  G.outingStartedAt = null;
+  renderAll();
+
+  // After transition completes, clean up and show return modal
+  setTimeout(() => {
+    overlay.classList.add('hidden');
+    const event  = pickOutingEvent();
+    const reward = calcOutingReward();
+    showReturnModal(event, reward);
+  }, 500);
+}
+
+function pickOutingEvent() {
+  const rares   = OUTING_EVENTS.filter(e => e.rarity === 'rare');
+  const commons = OUTING_EVENTS.filter(e => e.rarity === 'common');
+  if (rares.length > 0 && Math.random() < 0.2) {
+    return randomFrom(rares);
+  }
+  return randomFrom(commons);
+}
+
+function calcOutingReward() {
+  const r = Math.random();
+  if (r < 0.80) {
+    return { type: 'coins', amount: rand(5, 20) };
+  }
+  return { type: 'item', name: '神秘小礼物 🎁' };
+}
+
+function showReturnModal(event, reward) {
+  _currentOutingEvent  = event;
+  _currentOutingReward = reward;
+
+  // Render event area (top)
+  const eventArea = document.getElementById('return-event-area');
+  if (event.img) {
+    eventArea.innerHTML = `
+      <img class="return-event-img" src="${event.img}" alt=""
+           onerror="this.style.display='none'">
+      <div class="return-event-text">${event.text}</div>
+    `;
   } else {
-    event = randomFrom(OUTING_EVENTS.rare);
-    title = '✨ 稀有事件！';
-    tier  = 'rare';
-    G.bond = clamp(G.bond + 5, 0, 100);
-    addDiaryEntry(`今天的外出遇到了特别的事！`);
+    eventArea.innerHTML = `<div class="return-event-text">${event.text}</div>`;
   }
 
-  const baseCoins = rand(20, 50);
-  const bonusCoins = tier === 'rare' ? rand(30, 60) : 0;
-  G.coins += baseCoins + bonusCoins;
+  // Render reward area (bottom)
+  const rewardArea = document.getElementById('return-reward-area');
+  if (reward.type === 'coins') {
+    rewardArea.textContent = `🪙 获得金币 +${reward.amount} 枚`;
+  } else {
+    rewardArea.textContent = `🎁 获得：${reward.name}`;
+  }
+  rewardArea.classList.remove('hidden');
 
-  // Rare drop: special food
-  let rewardText = `🪙 获得 ${baseCoins + bonusCoins} 金币`;
-  if (tier === 'rare') {
-    rewardText += '\n🎀 羁绊 +5';
-    checkBondUnlocks();
+  document.getElementById('outing-return-modal').classList.remove('hidden');
+}
+
+function closeReturnModal() {
+  const event  = _currentOutingEvent;
+  const reward = _currentOutingReward;
+
+  // Apply reward
+  if (reward && reward.type === 'coins') {
+    G.coins += reward.amount;
   }
-  if (Math.random() < 0.10) {
-    rewardText += '\n🎂 获得特殊食物！';
-    addDiaryEntry('外出带回了稀有食物！');
-  }
+
+  // Write diary entry (with optional img for rare events)
+  const entry = { date: todayStr(), text: event.text, rarity: event.rarity };
+  if (event.img) entry.img = event.img;
+  G.diary.unshift(entry);
+  if (G.diary.length > 100) G.diary.pop();
+
+  G.outingStartedAt = null;
 
   saveState();
   renderAll();
-  showPopup(event.emoji, title, event.text, rewardText);
+  renderDiaryPanel();
+
+  document.getElementById('outing-return-modal').classList.add('hidden');
+  _currentOutingEvent  = null;
+  _currentOutingReward = null;
 }
 
 // ──────────────────────────────────────────────
@@ -370,12 +480,8 @@ function interact() {
   }
 }
 
-function toggleMusic() {
-  G.musicOn = !G.musicOn;
-  document.getElementById('btn-music').textContent = G.musicOn ? '🎵' : '🔇';
-  toast(G.musicOn ? '音乐已开启' : '音乐已静音');
-  saveState();
-}
+// music button removed; keeping stub for compatibility
+function toggleMusic() {}
 
 // ──────────────────────────────────────────────
 //   RENDER
@@ -424,9 +530,7 @@ function renderAll() {
   };
   testImg.src = spriteSrc;
 
-  // Avatar (small top-bar image)
-  const avatarImg = document.getElementById('avatar-img');
-  if (avatarImg) avatarImg.src = 'assets/characters/char_normal.png';
+  // (avatar removed from top bar)
 
   // Context label
   document.getElementById('context-label').textContent =
@@ -436,19 +540,7 @@ function renderAll() {
   document.getElementById('mood-tagline').textContent =
     randomFrom(MOOD_TAGLINES[expr]) || '';
 
-  // Outing cooldown status
-  const outStatus = document.getElementById('outing-status');
-  if (outStatus) {
-    const now = Date.now();
-    if (now < G.outingCooldown) {
-      const mins = Math.ceil((G.outingCooldown - now) / 60_000);
-      outStatus.textContent = `🕒 外出冷却中（${mins}分钟后可用）`;
-    } else {
-      outStatus.textContent = G.energy >= 50 && G.mood >= 40
-        ? '✅ 可以外出！'
-        : `❌ 外出条件：体力≥50（${Math.round(G.energy)}），心情≥40（${Math.round(G.mood)}）`;
-    }
-  }
+
 }
 
 function setBar(stat, val) {
@@ -517,25 +609,118 @@ function buildMemoryList() {
   });
 }
 
-function buildDiary() {
+function renderDiaryPanel() {
   const el = document.getElementById('diary-content');
+  if (!el) return;
   el.innerHTML = '';
   if (G.diary.length === 0) {
-    el.innerHTML = '<div class="empty-msg">📔 还没有日记，多和小企鹅互动吧～</div>';
+    el.innerHTML = '<div class="empty-msg">📔 还没有日记，出去走走吧～</div>';
     return;
   }
+  // G.diary is stored newest-first (unshift), so slice directly
   G.diary.slice(0, 30).forEach(d => {
     const div = document.createElement('div');
     div.className = 'diary-entry';
-    div.innerHTML = `<div class="mem-date">${d.date}</div><div class="mem-text">${d.text}</div>`;
+    if (d.img) {
+      div.innerHTML = `
+        <div class="mem-date">${d.date}</div>
+        <img class="diary-entry-img" src="${d.img}" alt="" onerror="this.style.display='none'">
+        <div class="mem-text diary-handwriting">${d.text}</div>
+      `;
+    } else {
+      div.innerHTML = `
+        <div class="mem-date">${d.date}</div>
+        <div class="mem-text diary-handwriting">${d.text}</div>
+      `;
+    }
     el.appendChild(div);
   });
 }
 
-function addDiaryEntry(text) {
-  G.diary.unshift({ date: todayStr(), text });
-  if (G.diary.length > 100) G.diary.pop();
-  buildDiary();
+
+// ──────────────────────────────────────────────
+//   DAILY TASKS
+// ──────────────────────────────────────────────
+function resetDailyTasksIfNeeded() {
+  const today = todayStr();
+  if (G.dailyTasks.date !== today) {
+    G.dailyTasks = { date: today, loginClaimed: false, feeds: 0, feedsClaimed: false, dressed: false, dressClaimed: false };
+    saveState();
+  }
+}
+
+function buildTasksPanel() {
+  const list = document.getElementById('tasks-list');
+  if (!list) return;
+  resetDailyTasksIfNeeded();
+  const dt = G.dailyTasks;
+
+  const tasks = [
+    {
+      key: 'login',
+      name: '今日登录签到',
+      progress: dt.loginClaimed ? '已完成' : '完成登录即可领取',
+      done: dt.loginClaimed,
+      canClaim: !dt.loginClaimed,
+      reward: '+20🪙',
+    },
+    {
+      key: 'feeds',
+      name: '今日投喂3次',
+      progress: `${Math.min(dt.feeds, 3)}/3`,
+      done: dt.feedsClaimed,
+      canClaim: dt.feeds >= 3 && !dt.feedsClaimed,
+      reward: '+30🪙',
+    },
+    {
+      key: 'dress',
+      name: '今日换装1次',
+      progress: dt.dressed ? '已完成' : '0/1',
+      done: dt.dressClaimed,
+      canClaim: dt.dressed && !dt.dressClaimed,
+      reward: '+10🪙',
+    },
+  ];
+
+  list.innerHTML = '';
+  tasks.forEach(t => {
+    const row = document.createElement('div');
+    row.className = `task-row${t.done ? ' done' : ''}`;
+    row.innerHTML = `
+      <span class="task-check">${t.done ? '✅' : '⬜'}</span>
+      <div class="task-info">
+        <div class="task-name">${t.name}</div>
+        <div class="task-progress">${t.progress}</div>
+      </div>
+      <button class="task-claim-btn" ${!t.canClaim ? 'disabled' : ''}
+              onclick="claimTask('${t.key}')">
+        ${t.done ? '已领取' : t.reward}
+      </button>
+    `;
+    list.appendChild(row);
+  });
+
+}
+
+function claimTask(key) {
+  resetDailyTasksIfNeeded();
+  const dt = G.dailyTasks;
+  if (key === 'login' && !dt.loginClaimed) {
+    dt.loginClaimed = true;
+    G.coins += 20;
+    toast('登录签到奖励 +20🪙');
+  } else if (key === 'feeds' && dt.feeds >= 3 && !dt.feedsClaimed) {
+    dt.feedsClaimed = true;
+    G.coins += 30;
+    toast('投喂任务完成 +30🪙');
+  } else if (key === 'dress' && dt.dressed && !dt.dressClaimed) {
+    dt.dressClaimed = true;
+    G.coins += 10;
+    toast('换装任务完成 +10🪙');
+  }
+  saveState();
+  renderAll();
+  buildTasksPanel();
 }
 
 // ──────────────────────────────────────────────
@@ -547,6 +732,8 @@ function openPanel(name) {
   closePanel();
   const el = document.getElementById(`panel-${name}`);
   if (!el) return;
+  if (name === 'tasks') buildTasksPanel();
+  if (name === 'diary') renderDiaryPanel();
   el.classList.remove('hidden');
   document.getElementById('backdrop').classList.remove('hidden');
   currentPanel = name;

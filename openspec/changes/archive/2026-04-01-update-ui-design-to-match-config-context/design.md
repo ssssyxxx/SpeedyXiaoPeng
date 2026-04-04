@@ -54,7 +54,7 @@ The game was initially styled with a warm brick-red/gold/brown Chinese room aest
 | Stat visibility | Add compact `#stat-mini-bar` below top-bar showing Hunger / Energy / Mood | Stats panel-only — rejected; config context specifies a visible sub-top stat bar |
 | Top-actions content | Replace 🍽/📊 buttons with coin display; feed moves to bottom nav | Keep feed/stats buttons in top-bar — rejected; config context assigns feed to bottom nav and coins to top-bar |
 | Bottom nav composition | 喂食 \| 装扮 per config context | Keep 挖宝 in nav — remove 挖宝 |
-| Left Side Bar | keeps only 成长日记 | Remove 相册 and 伙伴
+| Left Side Bar | keeps only 小猪日记 | Remove 相册 and 伙伴
 | game.js renderAll update | Minimal addition: populate 3 new `#mini-*` stat spans | No game.js changes — not viable; new DOM elements need values wired up |
 
 ## Migration Plan

@@ -4,9 +4,8 @@
     {
       "name": "speedypeng",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server"],
-      "port": 8877,
-      "autoPort": true
+      "runtimeArgs": ["-m", "http.server", "8877"],
+      "port": 8877
     }
   ]
 }

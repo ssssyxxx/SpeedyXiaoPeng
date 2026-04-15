@@ -286,13 +286,18 @@ body {
   border-top-color: rgba(255,255,250,0.97);
 }
 
-/* Character sprite wrapper */
+/* Character sprite wrapper — grid layout so both layers share the same cell */
 #char-sprite-wrap {
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: end center;  /* anchor both images to bottom-center */
   cursor: pointer;
+}
+
+/* Both images sit in the same grid cell, stacked */
+#char-sprite,
+#char-outfit-overlay {
+  grid-area: 1 / 1;
 }
 
 /* Character sprite */
@@ -301,13 +306,28 @@ body {
   height: auto;
   display: block;
   cursor: pointer;
-  /* mix-blend-mode: multiply makes white PNG backgrounds transparent
-     against any colored backdrop — safe to remove if sprites have true transparency */
   mix-blend-mode: normal;
   filter: drop-shadow(0 14px 20px rgba(0,0,0,0.45));
   transition: transform 0.2s ease;
+  z-index: 1;   /* explicit layer — outfit overlay sits above this */
 }
 #char-sprite:active, #char-fallback:active { transform: scale(0.95); }
+
+/*
+ * Outfit overlay — headless clothing image, same size as char-sprite.
+ * z-index: 2 ensures it always paints above the sprite even when
+ * the sprite's filter property creates a new stacking context.
+ * JS sets display:block + src when an outfit is worn; hidden otherwise.
+ */
+#char-outfit-overlay {
+  width: 200px;
+  height: auto;
+  object-fit: contain;
+  z-index: 2;
+  object-position: bottom;
+  pointer-events: none;
+  display: none;
+}
 
 /* Emoji fallback when image missing */
 #char-fallback {
@@ -718,7 +738,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   cursor: pointer;
   border-radius: 16px;
   padding: 12px;
@@ -728,9 +748,50 @@ body {
 }
 .outfit-item.active  { border-color: var(--c-purple); background: #eef0fb; }
 .outfit-item.locked  { opacity: 0.45; cursor: not-allowed; }
-.outfit-img {
-  width: 90px; height: 130px;
+
+/*
+ * Outfit thumbnail card — emoji is always the base layer (always visible).
+ * The image is absolutely positioned on top; if it fails to load the emoji shows.
+ */
+.outfit-thumb-wrap {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border-radius: 12px;
+  background: rgba(215,238,246,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.outfit-thumb-wrap .outfit-emoji {
+  font-size: 38px;
+  line-height: 1;
+}
+.outfit-thumb-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
+  /* Hide broken-image icon when load fails */
+  color: transparent;
+}
+/* Selected checkmark badge */
+.outfit-check {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 18px;
+  height: 18px;
+  background: var(--c-purple);
+  color: #fff;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .outfit-name   { font-size: 12px; font-weight: 800; color: var(--c-text-dark); text-align: center; }
 .outfit-unlock { font-size: 10px; color: #999; text-align: center; }

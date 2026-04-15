@@ -6,7 +6,11 @@
       "Bash(pip3 install:*)",
       "Bash(openspec status:*)",
       "Bash(openspec instructions:*)",
-      "Bash(openspec new:*)"
+      "Bash(openspec new:*)",
+      "Bash(python3 -c ' *)",
+      "Bash(curl -s http://127.0.0.1:8787/index.html)",
+      "Bash(npm install *)",
+      "Bash(node -e ' *)"
     ]
   }
 }

@@ -87,10 +87,13 @@
 
       <!-- Character sprite wrapper (handles image fallback gracefully) -->
       <div id="char-sprite-wrap">
+        <!-- Layer 1 (bottom): full-body expression image, changes per mood/state -->
         <img id="char-sprite"
              src="assets/characters/char_normal.png"
              alt=""
              onclick="interact()" />
+        <!-- Layer 2 (top): headless clothing overlay, same dimensions, hidden when no outfit worn -->
+        <img id="char-outfit-overlay" src="" alt="" />
         <div id="char-fallback" class="hidden" onclick="interact()">🐧</div>
       </div>
 

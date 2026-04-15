@@ -14,7 +14,7 @@ const defaultState = {
   mood:     80,
   hunger:   60,
   energy:   70,
-  bond:     0,
+  bond:     1,
   coins:    200,
   outfit:   'default',
   lastTick: Date.now(),
@@ -30,6 +30,20 @@ const defaultState = {
   dailyTasks: { date: '', loginClaimed: false, feeds: 0, feedsClaimed: false, dressed: false, dressClaimed: false },
 };
 
+// ─── Expression sprites map ────────────────────
+// Maps expression key → filename in assets/characters/
+const EXPRESSION_SPRITES = {
+  happy:       'char_happy.png',
+  normal:      'char_normal.png',
+  cold:        'char_sad.png',
+  sad:         'char_sad.png',
+  disgusted:   'char_disgusted.png',
+  pouty_tired: 'char_pouty_tired.png',
+  pouty_mood:  'char_pouty_mood.png',
+  chew1:       'char_chew1.png',
+  chew2:       'char_chew2.png',
+};
+
 // ─── Global state ──────────────────────────────
 let G = loadState();
 let speechTimer  = null;
@@ -38,6 +52,8 @@ let _lastBgSlot  = null; // tracks current background time slot
 let outingTimer  = null; // countdown interval reference
 let _currentOutingEvent  = null;
 let _currentOutingReward = null;
+let _chewTimer   = null; // chewing animation interval
+let _chewTimeout = null; // chewing animation stop timeout
 
 // ─── Data: Foods ──────────────────────────────
 const FOODS = [
@@ -57,11 +73,15 @@ const FOODS = [
 ];
 
 // ─── Data: Outfits ─────────────────────────────
+// ── 开发者在此处新增衣服 ─────────────────────────
+// thumb:      衣服卡片缩略图路径（null 则显示 thumbEmoji）
+// thumbEmoji: 缩略图加载失败时的 emoji 降级
+// overlay:    无头身体+衣服蒙版路径（null 则不叠加）
+// unlockBond: 解锁所需羁绊值
 const OUTFITS = [
-  { id:'default',  name:'日常便服',   sprite:'char_normal.png',   unlockBond:0,  desc:'清爽自然' },
-  { id:'casual',   name:'私服',       sprite:'char_casual.png',   unlockBond:20, desc:'羁绊20解锁' },
-  { id:'birthday', name:'生日限定',   sprite:'char_birthday.png', unlockBond:50, desc:'羁绊50解锁' },
-  { id:'concert',  name:'演唱会造型', sprite:'char_concert.png',  unlockBond:80, desc:'羁绊80解锁' },
+  { id:'default',  name:'原装',     thumbEmoji:'🐧', thumb:null,                                  overlay:null,                                     unlockBond:0,  desc:'清爽自然' },
+  { id:'overalls', name:'背带裤',   thumbEmoji:'👖', thumb:'assets/outfits/overalls_thumb.png',  overlay:'assets/characters/overalls_overlay.png', unlockBond:0,  desc:'清爽可爱' },
+  { id:'trendy',   name:'潮男衣服', thumbEmoji:'🧥', thumb:'assets/outfits/trendy_thumb.png',    overlay:'assets/characters/trendy_overlay.png',   unlockBond:0, desc:'羁绊20解锁' },
 ];
 
 // ─── Data: Dialogue ────────────────────────────
@@ -134,6 +154,7 @@ const OUTING_EVENTS = [
 window.addEventListener('DOMContentLoaded', () => {
   resetDailyTasksIfNeeded();
   applyOfflineDecay();
+  checkBondUnlocks(true); // ensure bond-0 outfits are unlocked on every load
   handleDailyLogin();
   buildFoodGrid();
   buildOutfitGrid();
@@ -283,14 +304,17 @@ function feedFood(foodId) {
   closePanel();
 
   if (food.type === 'liked') {
-    animSprite('bounce');
+    setCharExpression('happy');
     showSpeech(`${food.emoji || '😋'} 好吃！最喜欢了～`);
+    startChewing('happy');        // chewing ends → stay happy until next renderAll
   } else if (food.type === 'disliked') {
-    animSprite('shake');
+    setCharExpression('disgusted');
     showSpeech(`${food.emoji || '😣'} 呜…不喜欢这个…`);
+    startChewing(null);           // chewing ends → renderAll restores mood expression
   } else {
-    animSprite('spin');
+    setCharExpression(moodExpr());
     showSpeech(`${food.emoji || '🍞'} 谢谢投喂～`);
+    startChewing(null);
   }
 }
 
@@ -334,12 +358,9 @@ function showOutingBlocked(reason) {
   document.getElementById('outing-blocked-text').textContent = text;
   dialog.classList.remove('hidden');
 
-  // Pick sprite: tired (体力不足) vs pouty (心情不足)
-  const spriteName = reason === 'tired' ? 'char_pouty_tired.png' : 'char_pouty_mood.png';
-  const sprite = document.getElementById('char-sprite');
-  const testImg = new Image();
-  testImg.onload = () => { sprite.src = `assets/characters/${spriteName}`; };
-  testImg.src = `assets/characters/${spriteName}`;
+  // Pick expression: tired (体力不足) vs pouty (心情不足)
+  const exprKey = reason === 'tired' ? 'pouty_tired' : 'pouty_mood';
+  setCharExpression(exprKey);
 
   setTimeout(() => {
     dialog.classList.add('hidden');
@@ -484,6 +505,77 @@ function interact() {
 function toggleMusic() {}
 
 // ──────────────────────────────────────────────
+//   CHARACTER EXPRESSION & OUTFIT OVERLAY
+// ──────────────────────────────────────────────
+
+/** Set the bottom-layer expression image without touching the outfit overlay. */
+function setCharExpression(key) {
+  const file   = EXPRESSION_SPRITES[key] || 'char_normal.png';
+  const src    = `assets/characters/${file}`;
+  const sprite  = document.getElementById('char-sprite');
+  const fallback = document.getElementById('char-fallback');
+  if (!sprite) return;
+
+  const testImg = new Image();
+  testImg.onload = () => {
+    sprite.src = src;
+    sprite.classList.remove('hidden');
+    fallback?.classList.add('hidden');
+  };
+  testImg.onerror = () => {
+    // Fall back to char_normal.png, then emoji
+    const norm = new Image();
+    norm.onload  = () => { sprite.src = 'assets/characters/char_normal.png'; sprite.classList.remove('hidden'); fallback?.classList.add('hidden'); };
+    norm.onerror = () => { sprite.classList.add('hidden'); fallback?.classList.remove('hidden'); };
+    norm.src = 'assets/characters/char_normal.png';
+  };
+  testImg.src = src;
+}
+
+/** Show or hide the outfit overlay image above the character. */
+function applyOutfitOverlay(outfitId) {
+  const outfit = OUTFITS.find(o => o.id === outfitId);
+  const el = document.getElementById('char-outfit-overlay');
+  if (!el) return;
+  if (outfit && outfit.overlay) {
+    el.src = outfit.overlay;
+    el.style.display = 'block';
+  } else {
+    el.src = '';
+    el.style.display = 'none';
+  }
+}
+
+// ──────────────────────────────────────────────
+//   CHEWING ANIMATION
+// ──────────────────────────────────────────────
+
+/**
+ * Alternate chew1/chew2 frames to create a chewing animation.
+ * @param {string|null} afterExprKey — expression to restore after chewing ends
+ *                                     (null = call renderAll to restore mood-based expr)
+ * @param {number} duration — animation duration in ms (default 3000)
+ */
+function startChewing(afterExprKey = null, duration = 3000) {
+  stopChewing();
+  let frame = 0;
+  _chewTimer = setInterval(() => {
+    frame = 1 - frame;
+    setCharExpression(frame === 0 ? 'chew1' : 'chew2');
+  }, 350);
+  _chewTimeout = setTimeout(() => {
+    stopChewing();
+    if (afterExprKey) setCharExpression(afterExprKey);
+    else renderAll();
+  }, duration);
+}
+
+function stopChewing() {
+  if (_chewTimer)   { clearInterval(_chewTimer);   _chewTimer   = null; }
+  if (_chewTimeout) { clearTimeout(_chewTimeout);  _chewTimeout = null; }
+}
+
+// ──────────────────────────────────────────────
 //   RENDER
 // ──────────────────────────────────────────────
 function renderAll() {
@@ -507,30 +599,10 @@ function renderAll() {
   document.getElementById('mini-energy-val').textContent = Math.round(G.energy) + '%';
   document.getElementById('mini-mood-val').textContent   = Math.round(G.mood)   + '%';
 
-  // Character sprite — with graceful fallback
-  const sprite   = document.getElementById('char-sprite');
-  const fallback = document.getElementById('char-fallback');
-  const outfitData = OUTFITS.find(o => o.id === G.outfit);
-  const spriteSrc = (G.outfit !== 'default' && outfitData)
-    ? `assets/characters/${outfitData.sprite}`
-    : `assets/characters/char_${expr}.png`;
-
-  const testImg = new Image();
-  testImg.onload = () => {
-    sprite.src = spriteSrc;
-    sprite.classList.remove('hidden');
-    fallback?.classList.add('hidden');
-  };
-  testImg.onerror = () => {
-    // Try char_normal.png as universal fallback
-    const norm = new Image();
-    norm.onload  = () => { sprite.src = 'assets/characters/char_normal.png'; sprite.classList.remove('hidden'); fallback?.classList.add('hidden'); };
-    norm.onerror = () => { sprite.classList.add('hidden'); fallback?.classList.remove('hidden'); };
-    norm.src = 'assets/characters/char_normal.png';
-  };
-  testImg.src = spriteSrc;
-
-  // (avatar removed from top bar)
+  // Character expression (bottom layer) + outfit overlay (top layer).
+  // Skip expression update while chewing animation is running.
+  if (!_chewTimer) setCharExpression(expr);
+  applyOutfitOverlay(G.outfit);
 
   // Context label
   document.getElementById('context-label').textContent =
@@ -580,13 +652,16 @@ function buildOutfitGrid() {
     const active   = G.outfit === outfit.id;
     const div = document.createElement('div');
     div.className = `outfit-item${active ? ' active' : ''}${!unlocked ? ' locked' : ''}`;
+
+    // Emoji is always the base layer (always visible).
+    // Thumbnail image is absolutely positioned on top; if it fails the emoji shows through.
     div.innerHTML = `
-      <img class="outfit-img" src="assets/characters/${outfit.sprite}" alt="${outfit.name}"
-           onerror="this.replaceWith(Object.assign(document.createElement('div'), {
-             className:'outfit-img', style:'font-size:60px;line-height:130px;text-align:center',
-             textContent:'👤'
-           }))" />
-      <span class="outfit-name">${active ? '✓ ' : ''}${outfit.name}</span>
+      <div class="outfit-thumb-wrap">
+        <span class="outfit-emoji">${outfit.thumbEmoji}</span>
+        ${outfit.thumb ? `<img class="outfit-thumb-img" src="${outfit.thumb}" alt="${outfit.name}">` : ''}
+        ${active ? '<span class="outfit-check">✓</span>' : ''}
+      </div>
+      <span class="outfit-name">${outfit.name}</span>
       <span class="outfit-unlock">${unlocked ? (active ? '当前穿着' : '点击穿着') : outfit.desc}</span>
     `;
     div.addEventListener('click', () => equipOutfit(outfit.id));

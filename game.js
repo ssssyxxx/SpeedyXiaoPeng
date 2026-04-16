@@ -471,7 +471,7 @@ function finishOuting() {
 function pickOutingEvent() {
   const rares   = OUTING_EVENTS.filter(e => e.rarity === 'rare');
   const commons = OUTING_EVENTS.filter(e => e.rarity === 'common');
-  if (rares.length > 0 && Math.random() < 0.2) {
+  if (rares.length > 0 && Math.random() < 1) {
     return randomFrom(rares);
   }
   return randomFrom(commons);
@@ -778,28 +778,35 @@ function renderDiaryPanel() {
   const el = document.getElementById('diary-content');
   if (!el) return;
   el.innerHTML = '';
-  if (G.diary.length === 0) {
-    el.innerHTML = '<div class="empty-msg">📔 还没有日记，出去走走吧～</div>';
+
+  // Only show rare events (those with a photo)
+  const rareEntries = G.diary.filter(d => d.img);
+  if (rareEntries.length === 0) {
+    el.innerHTML = '<div class="empty-msg">📷 还没有珍贵回忆，多去外出探险吧～</div>';
     return;
   }
-  // G.diary is stored newest-first (unshift), so slice directly
-  G.diary.slice(0, 30).forEach(d => {
+
+  rareEntries.forEach(d => {
     const div = document.createElement('div');
-    div.className = 'diary-entry';
-    if (d.img) {
-      div.innerHTML = `
-        <div class="mem-date">${d.date}</div>
-        <img class="diary-entry-img" src="${d.img}" alt="" onerror="this.style.display='none'">
-        <div class="mem-text diary-handwriting">${d.text}</div>
-      `;
-    } else {
-      div.innerHTML = `
-        <div class="mem-date">${d.date}</div>
-        <div class="mem-text diary-handwriting">${d.text}</div>
-      `;
-    }
+    div.className = 'diary-thumb';
+    div.innerHTML = `
+      <img class="diary-thumb-img" src="${d.img}" alt="" onerror="this.style.display='none'">
+      <div class="diary-thumb-date">${d.date}</div>
+    `;
+    div.addEventListener('click', () => openDiaryDetail(d));
     el.appendChild(div);
   });
+}
+
+function openDiaryDetail(d) {
+  document.getElementById('diary-detail-img').src   = d.img;
+  document.getElementById('diary-detail-date').textContent = d.date;
+  document.getElementById('diary-detail-text').textContent = d.text;
+  document.getElementById('diary-detail-modal').classList.remove('hidden');
+}
+
+function closeDiaryDetail() {
+  document.getElementById('diary-detail-modal').classList.add('hidden');
 }
 
 

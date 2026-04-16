@@ -260,6 +260,16 @@
       </div>
     </div>
 
+    <!-- Diary Detail Modal -->
+    <div id="diary-detail-modal" class="popup-overlay hidden" onclick="closeDiaryDetail()">
+      <div class="popup-card diary-detail-card" onclick="event.stopPropagation()">
+        <img id="diary-detail-img" src="" alt="" class="diary-detail-img" />
+        <div id="diary-detail-date" class="mem-date diary-detail-date"></div>
+        <div id="diary-detail-text" class="diary-handwriting diary-detail-text"></div>
+        <button class="popup-confirm-btn" onclick="closeDiaryDetail()">收起 ✕</button>
+      </div>
+    </div>
+
     <!-- Backdrop -->
     <div id="backdrop" class="hidden" onclick="closePanel()"></div>
 

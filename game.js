@@ -22,7 +22,8 @@ const defaultState = {
   outingStartedAt: null,
   memories:  [],
   diary:     [],
-  unlockedOutfits: ['default'],
+  unlockedOutfits:  ['default'],  // bond-unlocked outfit ids
+  purchasedOutfits: ['default'],  // coin-purchased outfit ids
   totalFeeds: 0,
   loginStreak: 0,
   lastLogin: '',
@@ -72,17 +73,7 @@ const FOODS = [
   { id:'holiday_cake',   name:'节日蛋糕', type:'special',  price:0,   emoji:'🎂', hunger:15, mood:30, bond:10, special:true },
 ];
 
-// ─── Data: Outfits ─────────────────────────────
-// ── 开发者在此处新增衣服 ─────────────────────────
-// thumb:      衣服卡片缩略图路径（null 则显示 thumbEmoji）
-// thumbEmoji: 缩略图加载失败时的 emoji 降级
-// overlay:    无头身体+衣服蒙版路径（null 则不叠加）
-// unlockBond: 解锁所需羁绊值
-const OUTFITS = [
-  { id:'default',  name:'原装',     thumbEmoji:'🐧', thumb:null,                                  overlay:null,                                     unlockBond:0,  desc:'清爽自然' },
-  { id:'overalls', name:'背带裤',   thumbEmoji:'👖', thumb:'assets/outfits/overalls_thumb.png',  overlay:'assets/characters/overalls_overlay.png', unlockBond:0,  desc:'清爽可爱' },
-  { id:'trendy',   name:'潮男衣服', thumbEmoji:'🧥', thumb:'assets/outfits/trendy_thumb.png',    overlay:'assets/characters/trendy_overlay.png',   unlockBond:0, desc:'羁绊20解锁' },
-];
+// OUTFITS_CONFIG is loaded from outfits.js (must be included before game.js in HTML)
 
 // ─── Data: Dialogue ────────────────────────────
 const DIALOGUES = {
@@ -259,10 +250,35 @@ function handleDailyLogin() {
 }
 
 // ──────────────────────────────────────────────
-//   BOND UNLOCKS
+//   OUTFIT HELPERS
+// ──────────────────────────────────────────────
+
+/** True when a 'special' outfit's unlockDate has been reached. */
+function isSpecialOutfitAvailable(outfit) {
+  if (!outfit.unlockDate) return false;
+  return todayStr() >= outfit.unlockDate;
+}
+
+/**
+ * True when an outfit can be worn (purchased / unlocked / available).
+ * Used to distinguish "can equip" from "shown in panel".
+ */
+function isOutfitOwned(outfitId) {
+  const o = OUTFITS_CONFIG.find(x => x.id === outfitId);
+  if (!o) return false;
+  if (o.type === 'default')  return true;
+  if (o.type === 'coin')     return (G.purchasedOutfits || []).includes(outfitId);
+  if (o.type === 'bond')     return G.unlockedOutfits.includes(outfitId);
+  if (o.type === 'special')  return isSpecialOutfitAvailable(o);
+  return false;
+}
+
+// ──────────────────────────────────────────────
+//   BOND UNLOCKS  (bond-type outfits only)
 // ──────────────────────────────────────────────
 function checkBondUnlocks(silent = false) {
-  OUTFITS.forEach(o => {
+  OUTFITS_CONFIG.forEach(o => {
+    if (o.type !== 'bond') return;
     if (G.bond >= o.unlockBond && !G.unlockedOutfits.includes(o.id)) {
       G.unlockedOutfits.push(o.id);
       if (!silent) {
@@ -321,22 +337,60 @@ function feedFood(foodId) {
 // ──────────────────────────────────────────────
 //   OUTFIT
 // ──────────────────────────────────────────────
+
+/** Actually put the outfit on (called after ownership is confirmed). */
 function equipOutfit(outfitId) {
-  const outfit = OUTFITS.find(o => o.id === outfitId);
+  const outfit = OUTFITS_CONFIG.find(o => o.id === outfitId);
   if (!outfit) return;
-  if (!G.unlockedOutfits.includes(outfitId)) {
-    toast(`需要羁绊值 ${outfit.unlockBond} 才能解锁`);
+
+  // Guard: bond-type still locked
+  if (outfit.type === 'bond' && !G.unlockedOutfits.includes(outfitId)) {
+    toast(`❤ 羁绊值达到 ${outfit.unlockBond} 可解锁`);
     return;
   }
+  // Guard: coin-type not purchased — route to purchase instead
+  if (outfit.type === 'coin' && !(G.purchasedOutfits || []).includes(outfitId)) {
+    purchaseOutfit(outfitId);
+    return;
+  }
+
   if (G.outfit === outfitId) { closePanel(); return; }
 
-  G.outfit  = outfitId;
+  G.outfit = outfitId;
   G.dailyTasks.dressed = true;
   saveState();
   renderAll();
   buildOutfitGrid();
   closePanel();
-  toast(`换装完成！+10金币 ✨`);
+  toast('换装完成！✨');
+  showSpeech('打扮一下吧～好看嗎？');
+}
+
+/** Purchase a coin-type outfit: deduct coins and unlock. */
+function purchaseOutfit(outfitId) {
+  const outfit = OUTFITS_CONFIG.find(o => o.id === outfitId);
+  if (!outfit || outfit.type !== 'coin') return;
+
+  if (G.coins < outfit.price) {
+    toast(`金币不足！还差 ${outfit.price - G.coins} 🪙`);
+    animSprite('shake');
+    return;
+  }
+
+  G.coins -= outfit.price;
+  if (!G.purchasedOutfits) G.purchasedOutfits = ['default'];
+  G.purchasedOutfits.push(outfitId);
+  saveState();
+  buildOutfitGrid();
+  toast(`购买成功！🪙-${outfit.price}`);
+
+  // Equip immediately after purchase
+  G.outfit = outfitId;
+  G.dailyTasks.dressed = true;
+  saveState();
+  renderAll();
+  buildOutfitGrid();
+  closePanel();
   showSpeech('打扮一下吧～好看嗎？');
 }
 
@@ -534,7 +588,7 @@ function setCharExpression(key) {
 
 /** Show or hide the outfit overlay image above the character. */
 function applyOutfitOverlay(outfitId) {
-  const outfit = OUTFITS.find(o => o.id === outfitId);
+  const outfit = OUTFITS_CONFIG.find(o => o.id === outfitId);
   const el = document.getElementById('char-outfit-overlay');
   if (!el) return;
   if (outfit && outfit.overlay) {
@@ -647,14 +701,50 @@ function buildFoodGrid() {
 function buildOutfitGrid() {
   const grid = document.getElementById('outfit-grid');
   grid.innerHTML = '';
-  OUTFITS.forEach(outfit => {
-    const unlocked = G.unlockedOutfits.includes(outfit.id);
-    const active   = G.outfit === outfit.id;
-    const div = document.createElement('div');
-    div.className = `outfit-item${active ? ' active' : ''}${!unlocked ? ' locked' : ''}`;
+  const purchased = G.purchasedOutfits || ['default'];
 
-    // Emoji is always the base layer (always visible).
-    // Thumbnail image is absolutely positioned on top; if it fails the emoji shows through.
+  OUTFITS_CONFIG.forEach(outfit => {
+    // Type 4 (special): hide completely when not yet available
+    if (outfit.type === 'special' && !isSpecialOutfitAvailable(outfit)) return;
+
+    const active  = G.outfit === outfit.id;
+    const owned   = isOutfitOwned(outfit.id);
+    const div     = document.createElement('div');
+
+    // --- Type 3 (bond) locked: silhouette card ---
+    if (outfit.type === 'bond' && !owned) {
+      div.className = 'outfit-item bond-locked';
+      div.innerHTML = `
+        <div class="outfit-thumb-wrap silhouette">
+          <span class="outfit-emoji">${outfit.thumbEmoji}</span>
+          ${outfit.thumb ? `<img class="outfit-thumb-img" src="${outfit.thumb}" alt="">` : ''}
+        </div>
+        <span class="outfit-name">???</span>
+        <span class="outfit-unlock">❤ ${outfit.unlockBond} 解锁</span>
+      `;
+      div.addEventListener('click', () => toast(`❤ 羁绊值达到 ${outfit.unlockBond} 可解锁`));
+      grid.appendChild(div);
+      return;
+    }
+
+    // --- Type 2 (coin) not purchased: for-sale card ---
+    if (outfit.type === 'coin' && !owned) {
+      div.className = 'outfit-item coin-for-sale';
+      div.innerHTML = `
+        <div class="outfit-thumb-wrap">
+          <span class="outfit-emoji">${outfit.thumbEmoji}</span>
+          ${outfit.thumb ? `<img class="outfit-thumb-img" src="${outfit.thumb}" alt="${outfit.name}">` : ''}
+        </div>
+        <span class="outfit-name">${outfit.name}</span>
+        <span class="outfit-price">🪙 ${outfit.price}</span>
+      `;
+      div.addEventListener('click', () => purchaseOutfit(outfit.id));
+      grid.appendChild(div);
+      return;
+    }
+
+    // --- Owned / default / special-available: normal card ---
+    div.className = `outfit-item${active ? ' active' : ''}`;
     div.innerHTML = `
       <div class="outfit-thumb-wrap">
         <span class="outfit-emoji">${outfit.thumbEmoji}</span>
@@ -662,7 +752,7 @@ function buildOutfitGrid() {
         ${active ? '<span class="outfit-check">✓</span>' : ''}
       </div>
       <span class="outfit-name">${outfit.name}</span>
-      <span class="outfit-unlock">${unlocked ? (active ? '当前穿着' : '点击穿着') : outfit.desc}</span>
+      <span class="outfit-unlock">${active ? '当前穿着' : '点击穿着'}</span>
     `;
     div.addEventListener('click', () => equipOutfit(outfit.id));
     grid.appendChild(div);
@@ -861,10 +951,8 @@ function toast(msg) {
 //   SPRITE ANIMATION
 // ──────────────────────────────────────────────
 function animSprite(cls) {
-  // Animate whichever element is currently visible (img or emoji fallback)
-  const img = document.getElementById('char-sprite');
-  const fb  = document.getElementById('char-fallback');
-  const s   = (img && !img.classList.contains('hidden')) ? img : fb;
+  // Animate the whole wrapper so character + outfit overlay move together
+  const s = document.getElementById('char-sprite-wrap');
   if (!s) return;
   s.classList.remove('bounce', 'shake', 'spin');
   void s.offsetWidth;

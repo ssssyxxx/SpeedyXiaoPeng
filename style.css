@@ -344,9 +344,9 @@ body {
   50%      { transform: translateY(-8px); }
 }
 
-#char-sprite.bounce { animation: charBounce 0.55s ease; }
-#char-sprite.shake  { animation: charShake 0.45s ease; }
-#char-sprite.spin   { animation: charSpin 0.6s ease; }
+#char-sprite-wrap.bounce { animation: charBounce 0.55s ease; }
+#char-sprite-wrap.shake  { animation: charShake 0.45s ease; }
+#char-sprite-wrap.spin   { animation: charSpin 0.6s ease; }
 
 @keyframes charBounce {
   0%   { transform: translateY(0) scale(1); }
@@ -796,6 +796,39 @@ body {
 .outfit-name   { font-size: 12px; font-weight: 800; color: var(--c-text-dark); text-align: center; }
 .outfit-unlock { font-size: 10px; color: #999; text-align: center; }
 .outfit-item.active .outfit-name { color: var(--c-purple); }
+
+/* Type 2 (coin) — for-sale card */
+.outfit-item.coin-for-sale {
+  border-color: #f0c060;
+  background: #fffbf0;
+}
+.outfit-price {
+  font-size: 11px;
+  font-weight: 900;
+  color: #c8860a;
+  text-align: center;
+}
+
+/* Type 3 (bond) — locked silhouette card */
+.outfit-item.bond-locked {
+  cursor: not-allowed;
+  background: #f5f5f5;
+  border-color: #ddd;
+}
+/* Darken thumbnail image and emoji to a black silhouette */
+.outfit-thumb-wrap.silhouette .outfit-emoji,
+.outfit-thumb-wrap.silhouette .outfit-thumb-img {
+  filter: brightness(0);
+  opacity: 0.22;
+}
+.outfit-item.bond-locked .outfit-name {
+  color: #bbb;
+  letter-spacing: 2px;
+}
+.outfit-item.bond-locked .outfit-unlock {
+  color: var(--c-accent);
+  font-weight: 700;
+}
 
 /* ─── Memory / Diary ─── */
 #memory-list, #diary-content {

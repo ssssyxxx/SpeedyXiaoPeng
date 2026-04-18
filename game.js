@@ -897,38 +897,49 @@ function stopChewing() {
 function renderAll() {
   const expr = moodExpr();
 
-  // Stats bars
   setBar('mood',   G.mood);
   setBar('hunger', G.hunger);
   setBar('energy', G.energy);
-  setBar('bond',   G.bond);
 
-  // Values
+  // Bond EXP bar: fill relative to current level's required EXP
+  const bondExpMax = G.bondLevel < GAME_CONFIG.bondLevelMax
+    ? bondExpNeeded(G.bondLevel)
+    : 1;
+  const bondBarPct = G.bondLevel >= GAME_CONFIG.bondLevelMax
+    ? 100
+    : Math.round((G.bondExp / bondExpMax) * 100);
+  const bondBar = document.getElementById('bar-bond');
+  if (bondBar) bondBar.style.width = `${bondBarPct}%`;
+
+  const bondLevelStr = `Lv.${G.bondLevel}`;
+  document.getElementById('val-bond2').textContent  = bondLevelStr;
+  document.getElementById('bond-val').textContent   = bondLevelStr;
+
+  const bondExpInfoEl = document.getElementById('bond-exp-info');
+  if (bondExpInfoEl) {
+    if (G.bondLevel < GAME_CONFIG.bondLevelMax) {
+      bondExpInfoEl.textContent = `经验 ${G.bondExp} / ${bondExpMax}`;
+    } else {
+      bondExpInfoEl.textContent = '羁绊满级！';
+    }
+  }
+
   document.getElementById('val-mood').textContent   = Math.round(G.mood);
   document.getElementById('val-hunger').textContent = Math.round(G.hunger);
   document.getElementById('val-energy').textContent = Math.round(G.energy);
-  document.getElementById('val-bond2').textContent  = Math.round(G.bond);
   document.getElementById('coin-val').textContent   = G.coins;
   document.getElementById('coin-val2').textContent  = G.coins;
-  document.getElementById('bond-val').textContent   = Math.round(G.bond);
   document.getElementById('mini-hunger-val').textContent = Math.round(G.hunger) + '%';
   document.getElementById('mini-energy-val').textContent = Math.round(G.energy) + '%';
   document.getElementById('mini-mood-val').textContent   = Math.round(G.mood)   + '%';
 
-  // Character expression (bottom layer) + outfit overlay (top layer).
-  // Skip expression update while chewing animation is running.
   if (!_chewTimer) setCharExpression(expr);
   applyOutfitOverlay(G.outfit);
 
-  // Context label
   document.getElementById('context-label').textContent =
     G.outfit !== 'default' ? '打扮一下吧～' : randomFrom(CONTEXT_LABELS[expr]) || '';
-
-  // Mood tagline
   document.getElementById('mood-tagline').textContent =
     randomFrom(MOOD_TAGLINES[expr]) || '';
-
-
 }
 
 function setBar(stat, val) {

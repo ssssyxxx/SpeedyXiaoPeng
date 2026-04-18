@@ -509,13 +509,63 @@ function purchaseOutfit(outfitId) {
 // ──────────────────────────────────────────────
 //   OUTING (外出)
 // ──────────────────────────────────────────────
+function goOutEnergyCost(countToday) {
+  const costs = GAME_CONFIG.goOutEnergyCosts;
+  const idx = Math.min(countToday, costs.length - 1);
+  return costs[idx];
+}
+
+function goOutBaseCoinRange(countToday) {
+  const ranges = GAME_CONFIG.goOutBaseCoinRanges;
+  const idx = Math.min(countToday, ranges.length - 1);
+  return ranges[idx];
+}
+
+function hungerCoinMult() {
+  return G.hunger < GAME_CONFIG.lowHungerThreshold
+    ? GAME_CONFIG.hungerCoinPenaltyMult
+    : 1.0;
+}
+
+function moodCoinMult() {
+  if (G.mood >= 90) return GAME_CONFIG.moodCoinMult90;
+  if (G.mood >= 70) return GAME_CONFIG.moodCoinMult70;
+  return 1.0;
+}
+
+function rareEventChance() {
+  let bonus = 0;
+  if (G.mood >= 90)      bonus = GAME_CONFIG.rareMoodBonus90;
+  else if (G.mood >= 70) bonus = GAME_CONFIG.rareMoodBonus70;
+
+  if (getEquippedBondOutfitEffect() === 'RARE_EVENT_CHANCE_BONUS') bonus += 0.02;
+
+  const chance = GAME_CONFIG.rareBaseChance + bonus
+                 + G.rareFailCount * GAME_CONFIG.rarePityIncreasePerFail;
+  return Math.min(chance, GAME_CONFIG.rareMaxChanceCap);
+}
+
 function handleOutingClick() {
-  if (G.energy < 50 || G.mood < 40) {
-    // Priority: low energy > low mood when both fail
-    showOutingBlocked(G.energy < 50 ? 'tired' : 'mood');
+  resetDailyTasksIfNeeded();
+
+  if (G.hunger < GAME_CONFIG.goOutMinHunger) {
+    showOutingBlocked('hunger');
     return;
   }
-  startOuting();
+  if (G.mood < GAME_CONFIG.goOutMinMood) {
+    showOutingBlocked('mood');
+    return;
+  }
+
+  const nextCount = G.goOutCountToday + 1;
+  const cost = goOutEnergyCost(nextCount);
+
+  if (G.energy < cost) {
+    showOutingBlocked('tired');
+    return;
+  }
+
+  startOuting(cost, nextCount);
 }
 
 function showOutingBlocked(reason) {
@@ -524,25 +574,25 @@ function showOutingBlocked(reason) {
   document.getElementById('outing-blocked-text').textContent = text;
   dialog.classList.remove('hidden');
 
-  // Pick expression: tired (体力不足) vs pouty (心情不足)
   const exprKey = reason === 'tired' ? 'pouty_tired' : 'pouty_mood';
   setCharExpression(exprKey);
 
   setTimeout(() => {
     dialog.classList.add('hidden');
-    renderAll(); // restore sprite to mood-based expression
+    renderAll();
   }, 2000);
 }
 
-function startOuting() {
-  G.energy = clamp(G.energy - 20, 0, 100);
+function startOuting(energyCost, countForThisOuting) {
+  G.energy = clamp(G.energy - energyCost, 0, 100);
+  G.goOutCountToday = countForThisOuting;
+  G.goOutCountDate  = todayStr();
   G.outingStartedAt = Date.now();
+  G._pendingOutingCount = countForThisOuting;
   saveState();
 
-  // Hide character
   document.getElementById('char-sprite-wrap').classList.add('char-hidden');
 
-  // Show countdown text with fade-in
   const overlay = document.getElementById('outing-overlay');
   const countdownEl = document.getElementById('outing-countdown');
   let seconds = 20;
@@ -562,46 +612,72 @@ function startOuting() {
 }
 
 function finishOuting() {
-  const overlay   = document.getElementById('outing-overlay');
+  const overlay    = document.getElementById('outing-overlay');
   const spriteWrap = document.getElementById('char-sprite-wrap');
 
-  // Fade out overlay, fade in character simultaneously
   overlay.classList.remove('outing-visible');
   spriteWrap.classList.remove('char-hidden');
   G.outingStartedAt = null;
   renderAll();
 
-  // After transition completes, clean up and show return modal
   setTimeout(() => {
     overlay.classList.add('hidden');
-    const event  = pickOutingEvent();
-    const reward = calcOutingReward();
-    showReturnModal(event, reward);
+    const { event, isRare } = pickOutingEvent();
+    const baseReward = calcOutingReward(G._pendingOutingCount || 1);
+    showReturnModal(event, baseReward, isRare);
   }, 500);
 }
 
 function pickOutingEvent() {
-  const rares   = OUTING_EVENTS.filter(e => e.rarity === 'rare');
-  const commons = OUTING_EVENTS.filter(e => e.rarity === 'common');
-  if (rares.length > 0 && Math.random() < 1) {
-    return randomFrom(rares);
+  const isRare = Math.random() < rareEventChance();
+
+  if (isRare) {
+    G.rareFailCount = 0;
+    const rares = OUTING_EVENTS.filter(e => e.rarity === 'rare');
+    const uncollected = rares.filter(e => !G.rareCollectedIds.includes(e.id));
+    const pool = uncollected.length > 0 ? uncollected : rares;
+    const event = randomFrom(pool);
+    if (!G.rareCollectedIds.includes(event.id)) {
+      G.rareCollectedIds.push(event.id);
+    }
+    return { event, isRare: true };
+  } else {
+    G.rareFailCount++;
+    const commons = OUTING_EVENTS.filter(e => e.rarity === 'common');
+    return { event: randomFrom(commons), isRare: false };
   }
-  return randomFrom(commons);
 }
 
-function calcOutingReward() {
-  const r = Math.random();
-  if (r < 0.80) {
-    return { type: 'coins', amount: rand(5, 20) };
+function calcOutingReward(outingCount) {
+  const [baseLow, baseHigh] = goOutBaseCoinRange(outingCount);
+  let coins = rand(baseLow, baseHigh);
+  coins = Math.floor(coins * hungerCoinMult() * moodCoinMult());
+
+  if (getEquippedBondOutfitEffect() === 'GO_OUT_COIN_BONUS') {
+    coins = Math.floor(coins * 1.1);
   }
-  return { type: 'item', name: '神秘小礼物 🎁' };
+
+  const moodGain    = rand(...GAME_CONFIG.goOutBaseMoodRange);
+  const bondExpGain = rand(...GAME_CONFIG.goOutBaseBondExpRange);
+
+  return { coins, moodGain, bondExpGain };
 }
 
-function showReturnModal(event, reward) {
+function showReturnModal(event, baseReward, isRare) {
   _currentOutingEvent  = event;
-  _currentOutingReward = reward;
 
-  // Render event area (top)
+  let { coins, moodGain, bondExpGain } = baseReward;
+  if (isRare) {
+    coins       += rand(...GAME_CONFIG.rareExtraCoins);
+    moodGain    += rand(...GAME_CONFIG.rareExtraMood);
+    bondExpGain += rand(...GAME_CONFIG.rareExtraBondExp);
+  } else {
+    coins       += rand(...GAME_CONFIG.normalEventExtraCoins);
+    moodGain    += rand(...GAME_CONFIG.normalEventExtraMood);
+    bondExpGain += rand(...GAME_CONFIG.normalEventExtraBondExp);
+  }
+  _currentOutingReward = { coins, moodGain, bondExpGain, isRare };
+
   const eventArea = document.getElementById('return-event-area');
   if (event.img) {
     eventArea.innerHTML = `
@@ -613,13 +689,9 @@ function showReturnModal(event, reward) {
     eventArea.innerHTML = `<div class="return-event-text">${event.text}</div>`;
   }
 
-  // Render reward area (bottom)
   const rewardArea = document.getElementById('return-reward-area');
-  if (reward.type === 'coins') {
-    rewardArea.textContent = `🪙 获得金币 +${reward.amount} 枚`;
-  } else {
-    rewardArea.textContent = `🎁 获得：${reward.name}`;
-  }
+  const rareBadge = isRare ? '<span class="rare-badge">✨ 稀有</span> ' : '';
+  rewardArea.innerHTML = `${rareBadge}🪙+${coins} &nbsp; 🩷+${moodGain} &nbsp; 🎀经验+${bondExpGain}`;
   rewardArea.classList.remove('hidden');
 
   document.getElementById('outing-return-modal').classList.remove('hidden');
@@ -629,18 +701,20 @@ function closeReturnModal() {
   const event  = _currentOutingEvent;
   const reward = _currentOutingReward;
 
-  // Apply reward
-  if (reward && reward.type === 'coins') {
-    G.coins += reward.amount;
+  if (reward) {
+    G.coins += reward.coins;
+    G.mood   = clamp(G.mood + reward.moodGain, 0, 100);
+    addBondExp(reward.bondExpGain);
+    G.dailyTasks.goOutDone = true;
   }
 
-  // Write diary entry (with optional img for rare events)
   const entry = { date: todayStr(), text: event.text, rarity: event.rarity };
   if (event.img) entry.img = event.img;
   G.diary.unshift(entry);
   if (G.diary.length > 100) G.diary.pop();
 
   G.outingStartedAt = null;
+  G._pendingOutingCount = null;
 
   saveState();
   renderAll();
@@ -951,8 +1025,28 @@ function closeDiaryDetail() {
 function resetDailyTasksIfNeeded() {
   const today = todayStr();
   if (G.dailyTasks.date !== today) {
-    G.dailyTasks = { date: today, loginClaimed: false, feeds: 0, feedsClaimed: false, dressed: false, dressClaimed: false };
+    G.dailyTasks = {
+      date: today,
+      loginClaimed: false,
+      feeds: 0,
+      feedsClaimed: false,
+      goOutDone: false,
+      goOutClaimed: false,
+    };
     saveState();
+  }
+  if (G.goOutCountDate !== today) {
+    G.goOutCountToday = 0;
+    G.goOutCountDate  = today;
+  }
+  if (G.workDate !== today) {
+    G.workCountToday = 0;
+    G.workCoinsToday = 0;
+    G.workDate = today;
+  }
+  if (G.onlineMoodDate !== today) {
+    G.onlineMoodGainedToday = 0;
+    G.onlineMoodDate = today;
   }
 }
 

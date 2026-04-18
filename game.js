@@ -104,6 +104,11 @@ const GAME_CONFIG = {
   missionGoOutCoins:    20, missionGoOutBondExp:   6,
 };
 
+function getEquippedBondOutfitEffect() {
+  const o = OUTFITS_CONFIG.find(x => x.id === G.outfit && x.type === 'bond');
+  return o ? o.effect : null;
+}
+
 // ─── Expression sprites map ────────────────────
 // Maps expression key → filename in assets/characters/
 const EXPRESSION_SPRITES = {
@@ -452,7 +457,7 @@ function equipOutfit(outfitId) {
 
   // Guard: bond-type still locked
   if (outfit.type === 'bond' && !G.unlockedOutfits.includes(outfitId)) {
-    toast(`❤ 羁绊值达到 ${outfit.unlockBond} 可解锁`);
+    toast(`🎀 羁绊 Lv.${outfit.unlockLevel} 解锁`);
     return;
   }
   // Guard: coin-type not purchased — route to purchase instead
@@ -850,9 +855,9 @@ function buildOutfitGrid() {
           ${outfit.thumb ? `<img class="outfit-thumb-img" src="${outfit.thumb}" alt="">` : ''}
         </div>
         <span class="outfit-name">???</span>
-        <span class="outfit-unlock">❤ ${outfit.unlockBond} 解锁</span>
+        <span class="outfit-unlock">🎀 Lv.${outfit.unlockLevel} 解锁</span>
       `;
-      div.addEventListener('click', () => toast(`❤ 羁绊值达到 ${outfit.unlockBond} 可解锁`));
+      div.addEventListener('click', () => toast(`🎀 羁绊 Lv.${outfit.unlockLevel} 解锁`));
       grid.appendChild(div);
       return;
     }

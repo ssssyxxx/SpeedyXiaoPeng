@@ -471,7 +471,6 @@ function equipOutfit(outfitId) {
   if (G.outfit === outfitId) { closePanel(); return; }
 
   G.outfit = outfitId;
-  G.dailyTasks.dressed = true;
   saveState();
   renderAll();
   buildOutfitGrid();
@@ -500,7 +499,6 @@ function purchaseOutfit(outfitId) {
 
   // Equip immediately after purchase
   G.outfit = outfitId;
-  G.dailyTasks.dressed = true;
   saveState();
   renderAll();
   buildOutfitGrid();
@@ -514,7 +512,11 @@ function purchaseOutfit(outfitId) {
 function goOutEnergyCost(countToday) {
   const costs = GAME_CONFIG.goOutEnergyCosts;
   const idx = Math.min(countToday, costs.length - 1);
-  return costs[idx];
+  let cost = costs[idx];
+  if (getEquippedBondOutfitEffect() === 'GO_OUT_ENERGY_COST_REDUCTION') {
+    cost = Math.max(25, cost - 5);
+  }
+  return cost;
 }
 
 function goOutBaseCoinRange(countToday) {
@@ -626,6 +628,7 @@ function finishOuting() {
     overlay.classList.add('hidden');
     const { event, isRare } = pickOutingEvent();
     const baseReward = calcOutingReward(G._pendingOutingCount || 1);
+    saveState(); // persist pity state before showing modal
     showReturnModal(event, baseReward, isRare);
   }, 500);
 }
@@ -1111,6 +1114,8 @@ function closeDiaryDetail() {
 // ──────────────────────────────────────────────
 function resetDailyTasksIfNeeded() {
   const today = todayStr();
+  let changed = false;
+
   if (G.dailyTasks.date !== today) {
     G.dailyTasks = {
       date: today,
@@ -1120,21 +1125,25 @@ function resetDailyTasksIfNeeded() {
       goOutDone: false,
       goOutClaimed: false,
     };
-    saveState();
+    changed = true;
   }
   if (G.goOutCountDate !== today) {
     G.goOutCountToday = 0;
     G.goOutCountDate  = today;
+    changed = true;
   }
   if (G.workDate !== today) {
     G.workCountToday = 0;
     G.workCoinsToday = 0;
     G.workDate = today;
+    changed = true;
   }
   if (G.onlineMoodDate !== today) {
     G.onlineMoodGainedToday = 0;
     G.onlineMoodDate = today;
+    changed = true;
   }
+  if (changed) saveState();
 }
 
 function buildTasksPanel() {

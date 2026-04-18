@@ -247,15 +247,20 @@ function applyOfflineDecay() {
 }
 
 function tickHour(silent = false) {
-  // Hunger falls
-  G.hunger = clamp(G.hunger - 5, 0, 100);
-  // Mood falls (faster if hungry)
-  const moodDrain = G.hunger < 30 ? 5 : 2;
-  G.mood = clamp(G.mood - moodDrain, 0, 100);
-  // Energy recovers
-  G.energy = clamp(G.energy + 5, 0, 100);
-  // Mood bonus every hour if very happy
-  if (G.mood > 80) G.coins = Math.min(G.coins + 10, 999999);
+  // Hunger decay
+  G.hunger = clamp(G.hunger - GAME_CONFIG.hungerDecayPerHour, 0, 100);
+
+  // Mood decay — only when hunger is low
+  if (G.hunger < GAME_CONFIG.moodDecayTriggerHunger) {
+    G.mood = clamp(G.mood - GAME_CONFIG.moodDecayPerHourWhenHungry, 0, 100);
+  }
+
+  // Energy regen (halved when hunger low)
+  let energyRegen = GAME_CONFIG.energyRegenPerHour;
+  if (G.hunger < GAME_CONFIG.lowHungerThreshold) {
+    energyRegen = Math.floor(energyRegen * GAME_CONFIG.lowHungerEnergyRegenMult);
+  }
+  G.energy = clamp(G.energy + energyRegen, 0, 100);
 
   G.lastTick = Date.now();
   checkBondUnlocks(silent);

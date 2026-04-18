@@ -701,17 +701,17 @@ function closeReturnModal() {
   const event  = _currentOutingEvent;
   const reward = _currentOutingReward;
 
-  if (reward) {
+  if (reward && event) {
     G.coins += reward.coins;
     G.mood   = clamp(G.mood + reward.moodGain, 0, 100);
     addBondExp(reward.bondExpGain);
     G.dailyTasks.goOutDone = true;
-  }
 
-  const entry = { date: todayStr(), text: event.text, rarity: event.rarity };
-  if (event.img) entry.img = event.img;
-  G.diary.unshift(entry);
-  if (G.diary.length > 100) G.diary.pop();
+    const entry = { date: todayStr(), text: event.text, rarity: event.rarity };
+    if (event.img) entry.img = event.img;
+    G.diary.unshift(entry);
+    if (G.diary.length > 100) G.diary.pop();
+  }
 
   G.outingStartedAt = null;
   G._pendingOutingCount = null;

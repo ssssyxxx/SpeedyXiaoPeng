@@ -131,19 +131,21 @@ let _chewTimeout = null; // chewing animation stop timeout
 
 // ─── Data: Foods ──────────────────────────────
 const FOODS = [
-  // Regular
-  { id:'bread',          name:'面包',    type:'regular',  price:60,  emoji:'🍞', hunger:20, mood: 5, bond: 0 },
-  { id:'milk',           name:'牛奶',    type:'regular',  price:50,  emoji:'🥛', hunger:20, mood: 5, bond: 0 },
-  { id:'fruit',          name:'水果',    type:'regular',  price:70,  emoji:'🍓', hunger:20, mood: 5, bond: 0 },
-  // Liked
-  { id:'oyster_omelet',  name:'海蛎煎',  type:'liked',    price:80,  emoji:'🥘', hunger:25, mood:20, bond: 5 },
-  { id:'white_cake',     name:'白糕',    type:'liked',    price:75,  emoji:'🍡', hunger:25, mood:20, bond: 5 },
-  // Disliked
-  { id:'cilantro',       name:'香菜',    type:'disliked', price:10,  emoji:'🌿', hunger:20, mood:-5, bond:-1 },
-  { id:'tubeworm_jelly', name:'土笋冻',  type:'disliked', price:20,  emoji:'🫙', hunger:20, mood:-5, bond:-1 },
-  // Special (event drops only)
-  { id:'perf_sweet',     name:'演出甜品', type:'special',  price:0,   emoji:'⭐', hunger:15, mood:30, bond:10, special:true },
-  { id:'holiday_cake',   name:'节日蛋糕', type:'special',  price:0,   emoji:'🎂', hunger:15, mood:30, bond:10, special:true },
+  // ─── Normal (daily maintenance) ───────────────
+  { id:'normal_bento',     name:'便当',     type:'normal',    price:20,  emoji:'🍱', hunger:30, mood: 1 },
+  { id:'normal_home_meal', name:'家常菜',   type:'normal',    price:30,  emoji:'🍲', hunger:40, mood: 2 },
+  { id:'normal_big_set',   name:'大套餐',   type:'normal',    price:42,  emoji:'🍛', hunger:55, mood: 3 },
+  // ─── Favorite (mood boost) ────────────────────
+  { id:'fav_dessert',      name:'甜点',     type:'favorite',  price:55,  emoji:'🍰', hunger:20, mood:12 },
+  { id:'fav_bbq',          name:'烤肉',     type:'favorite',  price:75,  emoji:'🍖', hunger:35, mood:16 },
+  { id:'fav_luxury_meal',  name:'豪华套餐', type:'favorite',  price:100, emoji:'🦞', hunger:45, mood:22 },
+  // ─── Disliked (cheap survival, mood penalty) ──
+  { id:'dislike_bread',      name:'白面包',  type:'disliked', price:12,  emoji:'🍞', hunger:25, mood:-6  },
+  { id:'dislike_canned',     name:'罐头',    type:'disliked', price:18,  emoji:'🥫', hunger:35, mood:-8  },
+  { id:'dislike_cold_rice',  name:'冷米饭',  type:'disliked', price:25,  emoji:'🍚', hunger:45, mood:-10 },
+  // ─── Special (dev-added, event drops only) ────
+  { id:'perf_sweet',    name:'演出甜品', type:'special', price:0, emoji:'⭐', hunger:15, mood:30, special:true },
+  { id:'holiday_cake',  name:'节日蛋糕', type:'special', price:0, emoji:'🎂', hunger:15, mood:30, special:true },
 ];
 
 // OUTFITS_CONFIG is loaded from outfits.js (must be included before game.js in HTML)
@@ -404,7 +406,7 @@ function feedFood(foodId) {
   if (!food) return;
 
   if (food.special) {
-    toast('通过特殊事件或外出获得！');
+    toast('通过特殊事件获得！');
     return;
   }
   if (G.coins < food.price) {
@@ -420,22 +422,21 @@ function feedFood(foodId) {
   G.dailyTasks.feeds = (G.dailyTasks.feeds || 0) + 1;
 
   saveState();
-  checkBondUnlocks();
   buildFoodGrid();
   renderAll();
   closePanel();
 
-  if (food.type === 'liked') {
+  if (food.type === 'favorite') {
     setCharExpression('happy');
-    showSpeech(`${food.emoji || '😋'} 好吃！最喜欢了～`);
-    startChewing('happy');        // chewing ends → stay happy until next renderAll
+    showSpeech(`${food.emoji} 好吃！最喜欢了～`);
+    startChewing('happy');
   } else if (food.type === 'disliked') {
     setCharExpression('disgusted');
-    showSpeech(`${food.emoji || '😣'} 呜…不喜欢这个…`);
-    startChewing(null);           // chewing ends → renderAll restores mood expression
+    showSpeech(`${food.emoji} 呜…不喜欢这个…`);
+    startChewing(null);
   } else {
     setCharExpression(moodExpr());
-    showSpeech(`${food.emoji || '🍞'} 谢谢投喂～`);
+    showSpeech(`${food.emoji} 谢谢投喂～`);
     startChewing(null);
   }
 }
@@ -786,21 +787,44 @@ function setBar(stat, val) {
 function buildFoodGrid() {
   const grid = document.getElementById('food-grid');
   grid.innerHTML = '';
-  FOODS.forEach(food => {
-    const div = document.createElement('div');
-    div.className = `food-item ${food.type}${food.special ? ' locked' : ''}`;
-    div.innerHTML = `
-      ${food.type !== 'regular' ? `<span class="food-tag tag-${food.type}">${tagLabel(food.type)}</span>` : ''}
-      <img class="food-img" src="assets/food/food_${food.id}.png" alt="${food.name}"
-           onerror="this.replaceWith(Object.assign(document.createElement('div'), {
-             className:'food-img', style:'font-size:36px;line-height:60px;text-align:center',
-             textContent:'${food.emoji}'
-           }))" />
-      <span class="food-name">${food.name}</span>
-      <span class="food-price">${food.price > 0 ? `🪙${food.price}` : '事件获得'}</span>
-    `;
-    if (!food.special) div.addEventListener('click', () => feedFood(food.id));
-    grid.appendChild(div);
+
+  const groups = [
+    { type: 'normal',   label: '普通食物' },
+    { type: 'favorite', label: '最爱食物' },
+    { type: 'disliked', label: '不喜欢的食物' },
+    { type: 'special',  label: '特殊食物' },
+  ];
+
+  groups.forEach(({ type, label }) => {
+    const items = FOODS.filter(f => f.type === type);
+    if (items.length === 0) return;
+
+    const header = document.createElement('div');
+    header.className = 'food-group-header';
+    header.textContent = label;
+    grid.appendChild(header);
+
+    items.forEach(food => {
+      const div = document.createElement('div');
+      div.className = `food-item ${food.type}${food.special ? ' locked' : ''}`;
+
+      const moodSign  = food.mood >= 0 ? `+${food.mood}` : `${food.mood}`;
+      const moodColor = food.mood >= 0 ? '#ff6b9d' : '#e74c3c';
+
+      div.innerHTML = `
+        <img class="food-img" src="assets/food/food_${food.id}.png" alt="${food.name}"
+             onerror="this.replaceWith(Object.assign(document.createElement('div'), {
+               className:'food-img', style:'font-size:36px;line-height:60px;text-align:center',
+               textContent:'${food.emoji}'
+             }))" />
+        <span class="food-name">${food.name}</span>
+        <span class="food-bonus" style="color:#ffb347">🍚+${food.hunger}</span>
+        <span class="food-bonus" style="color:${moodColor}">🩷${moodSign}</span>
+        <span class="food-price">${food.price > 0 ? `🪙${food.price}` : '事件获得'}</span>
+      `;
+      if (!food.special) div.addEventListener('click', () => feedFood(food.id));
+      grid.appendChild(div);
+    });
   });
 }
 

@@ -237,6 +237,24 @@ window.addEventListener('DOMContentLoaded', () => {
   // Periodic tick
   setInterval(() => { tickHour(); saveState(); }, TICK_MS);
 
+  // Online mood regen: +0.2 mood per real minute, capped per day
+  // This interval always runs at 60s regardless of TICK_MS (which may be 1h in production)
+  setInterval(() => {
+    resetDailyTasksIfNeeded();
+
+    // Determine daily cap (base + bonus if coin outfit equipped)
+    const equippedOutfit = OUTFITS_CONFIG.find(o => o.id === G.outfit && o.type === 'coin');
+    const capBonus = equippedOutfit ? GAME_CONFIG.coinOutfitMoodCapBonus : 0;
+    const dailyCap = GAME_CONFIG.onlineMoodDailyCap + capBonus;
+
+    if (G.onlineMoodGainedToday < dailyCap) {
+      const gain = Math.min(GAME_CONFIG.onlineMoodGainPerMin, dailyCap - G.onlineMoodGainedToday);
+      G.mood = clamp(G.mood + gain, 0, 100);
+      G.onlineMoodGainedToday += gain;
+      saveState();
+    }
+  }, 60_000);
+
   // Tap character = interact
   document.getElementById('char-sprite').addEventListener('click', interact);
 });

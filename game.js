@@ -3,10 +3,10 @@
 // ═══════════════════════════════════════════════
 
 // ─── Constants ────────────────────────────────
-const STATE_KEY  = 'speedypeng_v2';
+const STATE_KEY = 'speedypeng_v3';
 // Tick = 60 real seconds = 1 game-hour.
 // Change to 3_600_000 for production (1 real hour = 1 game-hour).
-const TICK_MS    = 60_000;
+const TICK_MS   = 60_000;
 const MAX_OFFLINE_TICKS = 48; // cap at 48 game-hours offline
 
 // ─── Default State ────────────────────────────
@@ -14,21 +14,94 @@ const defaultState = {
   mood:     80,
   hunger:   60,
   energy:   70,
-  bond:     1,
+  bondLevel: 1,
+  bondExp:   0,
   coins:    200,
   outfit:   'default',
   lastTick: Date.now(),
-  outingCooldown: 0,
   outingStartedAt: null,
+  workStartedAt:   null,
   memories:  [],
   diary:     [],
-  unlockedOutfits:  ['default'],  // bond-unlocked outfit ids
-  purchasedOutfits: ['default'],  // coin-purchased outfit ids
-  totalFeeds: 0,
-  loginStreak: 0,
-  lastLogin: '',
-  // Daily tasks: reset each day
-  dailyTasks: { date: '', loginClaimed: false, feeds: 0, feedsClaimed: false, dressed: false, dressClaimed: false },
+  unlockedOutfits:  ['default'],
+  purchasedOutfits: ['default'],
+  totalFeeds:   0,
+  loginStreak:  0,
+  lastLogin:    '',
+  goOutCountToday: 0,
+  goOutCountDate:  '',
+  rareFailCount: 0,
+  rareCollectedIds: [],
+  workCountToday: 0,
+  workCoinsToday: 0,
+  workDate: '',
+  onlineMoodGainedToday: 0,
+  onlineMoodDate: '',
+  dailyTasks: {
+    date: '',
+    loginClaimed:  false,
+    feeds:         0,
+    feedsClaimed:  false,
+    goOutDone:     false,
+    goOutClaimed:  false,
+  },
+};
+
+// ─── Game Config ─────────────────────────────
+const GAME_CONFIG = {
+  // Stats
+  hungerMax: 100, moodMax: 100, energyMax: 100,
+  // Decay / regen per tick (1 tick = 1 game-hour)
+  hungerDecayPerHour:           6,
+  moodDecayTriggerHunger:       30,
+  moodDecayPerHourWhenHungry:   4,
+  energyRegenPerHour:           5,
+  lowHungerEnergyRegenMult:     0.5,
+  lowHungerThreshold:           30,
+  // Go-out gates
+  goOutMinHunger: 20,
+  goOutMinMood:   30,
+  // Go-out energy costs by daily count (1-indexed; index 4+ → cost 70)
+  goOutEnergyCosts: [0, 30, 40, 55, 70],
+  // Go-out base coin ranges by daily count (1-indexed; index 4+ → last entry)
+  goOutBaseCoinRanges: [[0,0], [60,90], [55,85], [45,70], [20,35]],
+  // Go-out base reward ranges
+  goOutBaseMoodRange:    [8, 15],
+  goOutBaseBondExpRange: [6, 10],
+  // Normal event extra rewards
+  normalEventExtraCoins:   [15, 30],
+  normalEventExtraMood:    [3, 6],
+  normalEventExtraBondExp: [2, 4],
+  // Rare event
+  rareBaseChance:          0.12,
+  rareMoodBonus70:         0.04,
+  rareMoodBonus90:         0.06,
+  rarePityIncreasePerFail: 0.04,
+  rareMaxChanceCap:        0.35,
+  rareExtraCoins:   [25, 50],
+  rareExtraMood:    [8, 12],
+  rareExtraBondExp: [12, 16],
+  // Coin multipliers
+  hungerCoinPenaltyMult:  0.7,
+  moodCoinMult70:         1.15,
+  moodCoinMult90:         1.25,
+  // Work
+  workDurationSeconds: 45,
+  workCoinRange:       [10, 15],
+  workBondExp:         2,
+  workDailyMaxTimes:   12,
+  workDailyCoinCap:    150,
+  // Online mood regen
+  onlineMoodGainPerMin:    0.2,
+  onlineMoodDailyCap:      15,
+  coinOutfitMoodCapBonus:  5,
+  // Bond level
+  bondLevelMax:    40,
+  levelUpRewardCoins: 20,
+  // Daily missions
+  missionLoginCoins:    10, missionLoginBondExp:   3,
+  missionFeedCoins:     10, missionFeedBondExp:    3,
+  missionGoOutCoins:    20, missionGoOutBondExp:   6,
 };
 
 // ─── Expression sprites map ────────────────────

@@ -109,6 +109,12 @@
       <div id="outing-countdown"></div>
     </div>
 
+    <!-- ── Work Overlay (shown while working) ── -->
+    <div id="work-overlay" class="hidden">
+      <div id="work-countdown"></div>
+      <div id="work-daily-progress"></div>
+    </div>
+
     <!-- ── Bottom Nav Plank ── -->
     <nav id="bottom-nav">
       <div id="nav-plank">
@@ -128,6 +134,13 @@
             <span class="nav-emoji" style="display:none">🚪</span>
           </div>
           <span class="nav-label">外出</span>
+        </button>
+
+        <button class="nav-btn" id="nav-work" onclick="handleWorkClick()">
+          <div class="nav-icon-bg">
+            <span class="nav-emoji" style="display:flex">💼</span>
+          </div>
+          <span class="nav-label">打工</span>
         </button>
 
         <button class="nav-btn" id="nav-outfit" onclick="openPanel('outfit')">

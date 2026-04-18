@@ -726,6 +726,80 @@ function closeReturnModal() {
 }
 
 // ──────────────────────────────────────────────
+//   WORK (打工)
+// ──────────────────────────────────────────────
+let workTimer = null;
+
+function handleWorkClick() {
+  resetDailyTasksIfNeeded();
+
+  if (G.workCountToday >= GAME_CONFIG.workDailyMaxTimes) {
+    toast('今天已经打够工啦！明天再来 💪');
+    return;
+  }
+  if (G.workCoinsToday >= GAME_CONFIG.workDailyCoinCap) {
+    toast('今日打工收入已达上限 150🪙');
+    return;
+  }
+  if (G.workStartedAt) return; // already working
+
+  startWork();
+}
+
+function startWork() {
+  G.workStartedAt = Date.now();
+  saveState();
+
+  const overlay     = document.getElementById('work-overlay');
+  const countdownEl = document.getElementById('work-countdown');
+  const progressEl  = document.getElementById('work-daily-progress');
+  let seconds = GAME_CONFIG.workDurationSeconds;
+
+  countdownEl.textContent = `💼 打工中... ${seconds}s`;
+  progressEl.textContent  = `今日打工收入：${G.workCoinsToday}/${GAME_CONFIG.workDailyCoinCap}🪙`;
+
+  overlay.classList.remove('hidden');
+  requestAnimationFrame(() => requestAnimationFrame(() => { overlay.style.opacity = '1'; }));
+
+  workTimer = setInterval(() => {
+    seconds--;
+    countdownEl.textContent = `💼 打工中... ${seconds}s`;
+    if (seconds <= 0) {
+      clearInterval(workTimer);
+      workTimer = null;
+      finishWork();
+    }
+  }, 1000);
+}
+
+function finishWork() {
+  const overlay = document.getElementById('work-overlay');
+  overlay.style.opacity = '0';
+  setTimeout(() => overlay.classList.add('hidden'), 300);
+
+  G.workStartedAt = null;
+
+  const remaining = GAME_CONFIG.workDailyCoinCap - G.workCoinsToday;
+  let earnedCoins = rand(...GAME_CONFIG.workCoinRange);
+  earnedCoins = Math.min(earnedCoins, remaining);
+
+  const earnedBondExp = earnedCoins > 0 ? GAME_CONFIG.workBondExp : 0;
+
+  G.workCountToday++;
+  if (earnedCoins > 0) {
+    G.workCoinsToday += earnedCoins;
+    G.coins          += earnedCoins;
+    addBondExp(earnedBondExp);
+    toast(`打工完成！+${earnedCoins}🪙 +${earnedBondExp}羁绊经验`);
+  } else {
+    toast('今日打工收入已达上限 150🪙');
+  }
+
+  saveState();
+  renderAll();
+}
+
+// ──────────────────────────────────────────────
 //   INTERACT (聊天 / tap)
 // ──────────────────────────────────────────────
 function interact() {

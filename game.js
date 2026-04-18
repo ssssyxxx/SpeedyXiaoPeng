@@ -319,7 +319,6 @@ function handleDailyLogin() {
     bonus = 30; msg = `连续${G.loginStreak}天签到！+30金币`;
   }
   G.coins += bonus;
-  G.bond   = clamp(G.bond + 3, 0, 100);
 
   // Mark login task as claimable (not auto-claimed — user claims in tasks panel)
   G.dailyTasks.loginClaimed = false;
@@ -352,12 +351,42 @@ function isOutfitOwned(outfitId) {
 }
 
 // ──────────────────────────────────────────────
+//   BOND LEVEL SYSTEM
+// ──────────────────────────────────────────────
+function bondExpNeeded(level) {
+  if (level <= 10)  return 20 + (level - 1) * 5;
+  if (level <= 25)  return 70 + (level - 11) * 10;
+  return 230 + (level - 26) * 15;
+}
+
+function addBondExp(amount) {
+  if (G.bondLevel >= GAME_CONFIG.bondLevelMax) return;
+  G.bondExp += amount;
+  while (G.bondLevel < GAME_CONFIG.bondLevelMax) {
+    const need = bondExpNeeded(G.bondLevel);
+    if (G.bondExp >= need) {
+      G.bondExp -= need;
+      G.bondLevel++;
+      grantLevelUpReward();
+    } else {
+      break;
+    }
+  }
+  checkBondUnlocks();
+}
+
+function grantLevelUpReward() {
+  G.coins += GAME_CONFIG.levelUpRewardCoins;
+  toast(`🎉 羁绊 Lv.${G.bondLevel}！+${GAME_CONFIG.levelUpRewardCoins}🪙`);
+}
+
+// ──────────────────────────────────────────────
 //   BOND UNLOCKS  (bond-type outfits only)
 // ──────────────────────────────────────────────
 function checkBondUnlocks(silent = false) {
   OUTFITS_CONFIG.forEach(o => {
     if (o.type !== 'bond') return;
-    if (G.bond >= o.unlockBond && !G.unlockedOutfits.includes(o.id)) {
+    if (G.bondLevel >= o.unlockLevel && !G.unlockedOutfits.includes(o.id)) {
       G.unlockedOutfits.push(o.id);
       if (!silent) {
         toast(`✨ 解锁新服装：${o.name}！`);
@@ -387,7 +416,6 @@ function feedFood(foodId) {
   G.coins  -= food.price;
   G.hunger  = clamp(G.hunger + food.hunger, 0, 100);
   G.mood    = clamp(G.mood   + food.mood,   0, 100);
-  G.bond    = clamp(G.bond   + food.bond,   0, 100);
   G.totalFeeds++;
   G.dailyTasks.feeds = (G.dailyTasks.feeds || 0) + 1;
 

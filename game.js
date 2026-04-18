@@ -327,28 +327,12 @@ function updateBackground() {
 function handleDailyLogin() {
   const today = todayStr();
   if (G.lastLogin === today) return;
+  G.lastLogin = today;
 
-  // Streak logic
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yStr = yesterday.toLocaleDateString('zh-CN');
-  G.loginStreak = (G.lastLogin === yStr) ? G.loginStreak + 1 : 1;
-  G.lastLogin   = today;
-
-  // Rewards
-  let bonus = 20;
-  let msg   = '每日签到 +20金币';
-  if (G.loginStreak >= 5) {
-    bonus = 40; msg = `连续${G.loginStreak}天签到！+40金币🎉`;
-  } else if (G.loginStreak >= 3) {
-    bonus = 30; msg = `连续${G.loginStreak}天签到！+30金币`;
-  }
-  G.coins += bonus;
-
-  // Mark login task as claimable (not auto-claimed — user claims in tasks panel)
+  // Mark login task as claimable
   G.dailyTasks.loginClaimed = false;
   saveState();
-  setTimeout(() => toast(msg), 800);
+  setTimeout(() => toast('今日登录成功，领取每日任务奖励吧！'), 800);
 }
 
 // ──────────────────────────────────────────────
@@ -1146,7 +1130,8 @@ function buildTasksPanel() {
   const list = document.getElementById('tasks-list');
   if (!list) return;
   resetDailyTasksIfNeeded();
-  const dt = G.dailyTasks;
+  const dt  = G.dailyTasks;
+  const cfg = GAME_CONFIG;
 
   const tasks = [
     {
@@ -1155,23 +1140,23 @@ function buildTasksPanel() {
       progress: dt.loginClaimed ? '已完成' : '完成登录即可领取',
       done: dt.loginClaimed,
       canClaim: !dt.loginClaimed,
-      reward: '+20🪙',
+      reward: `+${cfg.missionLoginCoins}🪙 +${cfg.missionLoginBondExp}羁绊经验`,
     },
     {
       key: 'feeds',
-      name: '今日投喂3次',
-      progress: `${Math.min(dt.feeds, 3)}/3`,
+      name: '今日投喂 1 次',
+      progress: `${Math.min(dt.feeds, 1)}/1`,
       done: dt.feedsClaimed,
-      canClaim: dt.feeds >= 3 && !dt.feedsClaimed,
-      reward: '+30🪙',
+      canClaim: dt.feeds >= 1 && !dt.feedsClaimed,
+      reward: `+${cfg.missionFeedCoins}🪙 +${cfg.missionFeedBondExp}羁绊经验`,
     },
     {
-      key: 'dress',
-      name: '今日换装1次',
-      progress: dt.dressed ? '已完成' : '0/1',
-      done: dt.dressClaimed,
-      canClaim: dt.dressed && !dt.dressClaimed,
-      reward: '+10🪙',
+      key: 'goOut',
+      name: '今日外出 1 次',
+      progress: dt.goOutDone ? '已完成' : '0/1',
+      done: dt.goOutClaimed,
+      canClaim: dt.goOutDone && !dt.goOutClaimed,
+      reward: `+${cfg.missionGoOutCoins}🪙 +${cfg.missionGoOutBondExp}羁绊经验`,
     },
   ];
 
@@ -1193,24 +1178,37 @@ function buildTasksPanel() {
     list.appendChild(row);
   });
 
+  // Work progress footer
+  const workFooter = document.createElement('div');
+  workFooter.className = 'task-work-progress';
+  workFooter.textContent = `💼 今日打工收入：${G.workCoinsToday}/${GAME_CONFIG.workDailyCoinCap}🪙  (${G.workCountToday}/${GAME_CONFIG.workDailyMaxTimes}次)`;
+  list.appendChild(workFooter);
 }
 
 function claimTask(key) {
   resetDailyTasksIfNeeded();
-  const dt = G.dailyTasks;
+  const dt  = G.dailyTasks;
+  const cfg = GAME_CONFIG;
+
   if (key === 'login' && !dt.loginClaimed) {
     dt.loginClaimed = true;
-    G.coins += 20;
-    toast('登录签到奖励 +20🪙');
-  } else if (key === 'feeds' && dt.feeds >= 3 && !dt.feedsClaimed) {
+    G.coins += cfg.missionLoginCoins;
+    addBondExp(cfg.missionLoginBondExp);
+    toast(`登录签到 +${cfg.missionLoginCoins}🪙 +${cfg.missionLoginBondExp}羁绊经验`);
+
+  } else if (key === 'feeds' && dt.feeds >= 1 && !dt.feedsClaimed) {
     dt.feedsClaimed = true;
-    G.coins += 30;
-    toast('投喂任务完成 +30🪙');
-  } else if (key === 'dress' && dt.dressed && !dt.dressClaimed) {
-    dt.dressClaimed = true;
-    G.coins += 10;
-    toast('换装任务完成 +10🪙');
+    G.coins += cfg.missionFeedCoins;
+    addBondExp(cfg.missionFeedBondExp);
+    toast(`投喂任务 +${cfg.missionFeedCoins}🪙 +${cfg.missionFeedBondExp}羁绊经验`);
+
+  } else if (key === 'goOut' && dt.goOutDone && !dt.goOutClaimed) {
+    dt.goOutClaimed = true;
+    G.coins += cfg.missionGoOutCoins;
+    addBondExp(cfg.missionGoOutBondExp);
+    toast(`外出任务 +${cfg.missionGoOutCoins}🪙 +${cfg.missionGoOutBondExp}羁绊经验`);
   }
+
   saveState();
   renderAll();
   buildTasksPanel();

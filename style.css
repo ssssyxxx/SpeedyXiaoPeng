@@ -1085,7 +1085,7 @@ body {
   border-radius: inherit;
   gap: 12px;
 }
-#work-overlay:not(.hidden) { opacity: 1; }
+.work-visible { opacity: 1 !important; }
 #work-countdown {
   color: #fff;
   font-size: 1.4rem;

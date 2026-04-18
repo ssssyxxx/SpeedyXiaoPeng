@@ -759,7 +759,7 @@ function startWork() {
   progressEl.textContent  = `今日打工收入：${G.workCoinsToday}/${GAME_CONFIG.workDailyCoinCap}🪙`;
 
   overlay.classList.remove('hidden');
-  requestAnimationFrame(() => requestAnimationFrame(() => { overlay.style.opacity = '1'; }));
+  requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('work-visible')));
 
   workTimer = setInterval(() => {
     seconds--;
@@ -774,7 +774,7 @@ function startWork() {
 
 function finishWork() {
   const overlay = document.getElementById('work-overlay');
-  overlay.style.opacity = '0';
+  overlay.classList.remove('work-visible');
   setTimeout(() => overlay.classList.add('hidden'), 300);
 
   G.workStartedAt = null;

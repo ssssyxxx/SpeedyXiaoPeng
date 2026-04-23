@@ -21,7 +21,13 @@
         <img src="assets/ui/icon_bond.png" class="pill-img" alt=""
              onerror="this.style.display='none';this.nextElementSibling.style.display='inline'">
         <span class="pill-emoji" style="display:none">❤</span>
-        <span id="bond-val">Lv.1</span>
+        <div id="bond-pill-right">
+          <span id="bond-val">Lv.1</span>
+          <div class="bond-exp-bar-wrap">
+            <div class="bond-exp-bar-fill" id="bond-exp-bar-fill"></div>
+            <span class="bond-exp-bar-text" id="bond-exp-info"></span>
+          </div>
+        </div>
       </div>
       <div id="top-actions">
         <div id="coin-display">
@@ -80,11 +86,6 @@
       <!-- Context label (like 打扮一下吧) -->
       <div id="context-label"></div>
 
-      <!-- Speech bubble -->
-      <div id="speech-bubble" class="hidden">
-        <span id="speech-text"></span>
-      </div>
-
       <!-- Character sprite wrapper (handles image fallback gracefully) -->
       <div id="char-sprite-wrap">
         <!-- Layer 1 (bottom): full-body expression image, changes per mood/state -->
@@ -97,10 +98,7 @@
         <div id="char-fallback" class="hidden" onclick="interact()">🐧</div>
       </div>
 
-      <!-- Mood tagline below character -->
-      <div id="mood-tagline"></div>
-
-      <!-- Ground shadow -->
+<!-- Ground shadow -->
       <div id="char-shadow"></div>
     </div>
 
@@ -155,41 +153,6 @@
     </nav>
 
     <!-- ═══ PANELS ═══ -->
-
-    <!-- Stats Panel -->
-    <div id="panel-stats" class="panel-overlay hidden">
-      <div class="panel-card">
-        <div class="panel-header">
-          <span>📊 状态</span>
-          <button class="close-btn" onclick="closePanel()">✕</button>
-        </div>
-        <div class="stats-list">
-          <div class="stat-row">
-            <span class="stat-label">🩷 心情</span>
-            <div class="stat-bar-wrap"><div class="stat-bar" id="bar-mood" style="background:linear-gradient(90deg,#ff6b9d,#ff8cb4)"></div></div>
-            <span class="stat-val" id="val-mood">0</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">🍚 饥饿</span>
-            <div class="stat-bar-wrap"><div class="stat-bar" id="bar-hunger" style="background:linear-gradient(90deg,#ffb347,#ffd080)"></div></div>
-            <span class="stat-val" id="val-hunger">0</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">⚡ 体力</span>
-            <div class="stat-bar-wrap"><div class="stat-bar" id="bar-energy" style="background:linear-gradient(90deg,#56ccf2,#2f80ed)"></div></div>
-            <span class="stat-val" id="val-energy">0</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">🎀 羁绊</span>
-            <div class="stat-bar-wrap"><div class="stat-bar" id="bar-bond" style="background:linear-gradient(90deg,#bb6bd9,#9b51e0)"></div></div>
-            <span class="stat-val" id="val-bond2">Lv.1</span>
-          </div>
-          <div class="bond-exp-info" id="bond-exp-info"></div>
-          <div class="coin-info">🪙 金币：<strong id="coin-val2">0</strong></div>
-          <div id="outing-status" class="outing-status"></div>
-        </div>
-      </div>
-    </div>
 
     <!-- Feed Panel -->
     <div id="panel-feed" class="panel-overlay hidden">
@@ -247,11 +210,6 @@
     </div>
 
     <!-- ═══ POPUPS ═══ -->
-
-    <!-- Outing Blocked Dialog (auto-close, 2s) -->
-    <div id="outing-blocked-dialog" class="hidden">
-      <div id="outing-blocked-text"></div>
-    </div>
 
     <!-- Outing Return Modal -->
     <div id="outing-return-modal" class="popup-overlay hidden">

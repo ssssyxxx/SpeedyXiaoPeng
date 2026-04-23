@@ -13,7 +13,11 @@
       "Bash(node -e ' *)",
       "Bash(node --check outfits.js)",
       "Bash(node --check game.js)",
-      "Bash(node debug2.js)"
+      "Bash(node debug2.js)",
+      "Bash(node --check /Users/sunyi/Documents/SpeedyPeng/game.js)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(node --check /Users/sunyi/Documents/SpeedyPeng/outfits.js)"
     ]
   }
 }

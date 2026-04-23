@@ -108,6 +108,23 @@ body {
   color: var(--c-text-dark);
   box-shadow: 0 2px 8px rgba(0,0,0,0.25);
 }
+#bond-pill-right {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 80px;
+}
+#bond-pill .bond-exp-bar-wrap {
+  height: 12px;
+  margin: 0;
+  border-radius: 6px;
+}
+#bond-pill .bond-exp-bar-fill {
+  border-radius: 6px;
+}
+#bond-pill .bond-exp-bar-text {
+  font-size: 0.6rem;
+}
 .pill-img {
   width: 18px; height: 18px;
   object-fit: contain;
@@ -259,32 +276,9 @@ body {
   margin-bottom: 6px;
   text-align: center;
   padding: 0 8px;
+  transition: opacity 0.2s;
 }
-
-/* Speech bubble */
-#speech-bubble {
-  background: rgba(255,255,250,0.97);
-  border-radius: 16px;
-  padding: 10px 16px;
-  font-size: 13px;
-  color: #3a2010;
-  line-height: 1.6;
-  text-align: center;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
-  max-width: 230px;
-  position: relative;
-  margin-bottom: 10px;
-  border: 1.5px solid #e8d5b0;
-}
-#speech-bubble::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 9px solid transparent;
-  border-top-color: rgba(255,255,250,0.97);
-}
+#context-label.label-hidden { opacity: 0; }
 
 /* Character sprite wrapper — grid layout so both layers share the same cell */
 #char-sprite-wrap {
@@ -367,22 +361,6 @@ body {
   100% { transform: rotate(0deg) scale(1); }
 }
 
-/* Mood tagline */
-#mood-tagline {
-  font-size: 13px;
-  font-weight: 900;
-  color: #ffd700;
-  text-shadow:
-    1px 1px 0 rgba(0,20,50,0.7),
-    0 0 10px rgba(255,200,0,0.5);
-  letter-spacing: 1px;
-  margin-top: 4px;
-  text-align: center;
-  min-height: 20px;
-  padding: 2px 10px;
-  background: rgba(13,27,42,0.35);
-  border-radius: 10px;
-}
 
 /* Ground shadow */
 #char-shadow {
@@ -436,6 +414,7 @@ body {
   position: relative;
 }
 .nav-btn:active { transform: scale(0.9); }
+.nav-btn:disabled { opacity: 0.4; pointer-events: none; }
 
 .nav-icon-bg {
   width: 52px; height: 52px;
@@ -487,28 +466,6 @@ body {
   color: #fff;
   text-shadow: 0 1px 6px rgba(0,0,0,0.6);
   letter-spacing: 1px;
-}
-
-/* ════════════════════════════════
-   OUTING BLOCKED DIALOG
-   ════════════════════════════════ */
-#outing-blocked-dialog {
-  position: absolute;
-  bottom: 170px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 50;
-  background: rgba(255,255,250,0.97);
-  border-radius: 18px;
-  padding: 14px 24px;
-  font-size: 15px;
-  color: #3a2010;
-  text-align: center;
-  box-shadow: 0 6px 24px rgba(0,0,0,0.3);
-  border: 2px solid #ffb3d1;
-  white-space: nowrap;
-  pointer-events: none;
-  font-weight: 600;
 }
 
 /* ════════════════════════════════
@@ -701,7 +658,7 @@ body {
   position: relative;
 }
 .food-item:active { transform: scale(0.93); }
-.food-item.liked   { border-color: #ffb3d1; background: #fff5f9; }
+.food-item.favorite{ border-color: #ffb3d1; background: #fff5f9; }
 .food-item.disliked{ border-color: #ccc;    background: #f9f9f9; }
 .food-item.special { border-color: #c9a0ff; background: #f5eeff; }
 .food-item.locked  { opacity: 0.45; cursor: not-allowed; }
@@ -1115,14 +1072,34 @@ body {
   line-height: 1.2;
 }
 
-/* ── Bond EXP info line ── */
-.bond-exp-info {
-  text-align: right;
-  font-size: 0.72rem;
-  color: #aaa;
-  margin-top: -4px;
+/* ── Bond EXP progress bar ── */
+.bond-exp-bar-wrap {
+  position: relative;
+  height: 16px;
+  background: rgba(0,0,0,0.12);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 4px;
   margin-bottom: 6px;
-  padding-right: 4px;
+}
+.bond-exp-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #bb6bd9, #9b51e0);
+  border-radius: 8px;
+  transition: width 0.4s ease;
+  width: 0%;
+}
+.bond-exp-bar-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+  pointer-events: none;
 }
 
 /* ── Rare event badge ── */

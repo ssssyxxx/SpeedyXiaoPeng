@@ -171,13 +171,6 @@ const CONTEXT_LABELS = {
   sad:    ['好难受…', '呜呜…', '心情不好'],
 };
 
-// ─── Data: Mood taglines ──────────────────────
-const MOOD_TAGLINES = {
-  happy:  ['立誓做一只快乐小企鹅！', '今天也元气满满！', '啊啊啊开心！'],
-  normal: ['平平淡淡才是真', '嗯，挺好的', ''],
-  cold:   ['已进入省电模式', '不想说话谢谢', ''],
-  sad:    ['需要一个拥抱…', '求投喂…', '心情有点低落'],
-};
 
 // ─── Data: Outing blocked dialogues ──────────
 const OUTING_BLOCKED_DIALOGUES = [
@@ -227,6 +220,8 @@ window.addEventListener('DOMContentLoaded', () => {
   applyOfflineDecay();
   checkBondUnlocks(true); // ensure bond-0 outfits are unlocked on every load
   handleDailyLogin();
+  resumeOutingIfNeeded();
+  resumeWorkIfNeeded();
   buildFoodGrid();
   buildOutfitGrid();
   buildMemoryList();
@@ -257,6 +252,9 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Tap character = interact
   document.getElementById('char-sprite').addEventListener('click', interact);
+
+  // Start idle chatter — randomly shows CONTEXT_LABELS lines when label is hidden
+  scheduleIdleChatter();
 });
 
 // ──────────────────────────────────────────────
@@ -434,15 +432,12 @@ function feedFood(foodId) {
   closePanel();
 
   if (food.type === 'favorite') {
-    setCharExpression('happy');
     showSpeech(`${food.emoji} 好吃！最喜欢了～`);
-    startChewing('happy');
+    startChewing('happy', 3000);
   } else if (food.type === 'disliked') {
-    setCharExpression('disgusted');
     showSpeech(`${food.emoji} 呜…不喜欢这个…`);
-    startChewing(null);
+    startChewing('disgusted', 3000);
   } else {
-    setCharExpression(moodExpr());
     showSpeech(`${food.emoji} 谢谢投喂～`);
     startChewing(null);
   }
@@ -553,7 +548,7 @@ function handleOutingClick() {
   resetDailyTasksIfNeeded();
 
   if (G.hunger < GAME_CONFIG.goOutMinHunger) {
-    showOutingBlocked('hunger');
+    showOutingBlocked('tired');
     return;
   }
   if (G.mood < GAME_CONFIG.goOutMinMood) {
@@ -569,22 +564,73 @@ function handleOutingClick() {
     return;
   }
 
-  startOuting(cost, nextCount);
+  // Show departure message, then start outing after 2s
+  showSpeech(randomFrom(OUTING_DEPARTURE_MESSAGES), 2000);
+  document.getElementById('nav-outing').disabled = true;
+  setTimeout(() => startOuting(cost, nextCount), 2000);
 }
 
 function showOutingBlocked(reason) {
   const text = randomFrom(OUTING_BLOCKED_DIALOGUES);
-  const dialog = document.getElementById('outing-blocked-dialog');
-  document.getElementById('outing-blocked-text').textContent = text;
-  dialog.classList.remove('hidden');
-
-  const exprKey = reason === 'tired' ? 'pouty_tired' : 'pouty_mood';
+  const exprKey = reason === 'tired' ? 'pouty_tired' : 'char_sad';
   setCharExpression(exprKey);
+  showSpeech(text, 3000);
+  setTimeout(() => renderAll(), 3000);
+}
 
-  setTimeout(() => {
-    dialog.classList.add('hidden');
-    renderAll();
-  }, 2000);
+function resumeOutingIfNeeded() {
+  if (!G.outingStartedAt) return;
+  const elapsed = Math.floor((Date.now() - G.outingStartedAt) / 1000);
+  const remaining = 20 - elapsed;
+  if (remaining <= 0) {
+    // Outing already over — finish immediately
+    finishOuting();
+    return;
+  }
+  // Resume countdown from remaining seconds
+  document.getElementById('char-sprite-wrap').classList.add('char-hidden');
+  const overlay = document.getElementById('outing-overlay');
+  const countdownEl = document.getElementById('outing-countdown');
+  let seconds = remaining;
+  countdownEl.textContent = `${seconds} 小猪出门中....`;
+  overlay.classList.remove('hidden');
+  overlay.classList.add('outing-visible');
+  outingTimer = setInterval(() => {
+    seconds--;
+    countdownEl.textContent = `${seconds} 小猪出门中....`;
+    if (seconds <= 0) {
+      clearInterval(outingTimer);
+      outingTimer = null;
+      finishOuting();
+    }
+  }, 1000);
+}
+
+function resumeWorkIfNeeded() {
+  if (!G.workStartedAt) return;
+  const elapsed = Math.floor((Date.now() - G.workStartedAt) / 1000);
+  const remaining = GAME_CONFIG.workDurationSeconds - elapsed;
+  if (remaining <= 0) {
+    finishWork();
+    return;
+  }
+  const overlay     = document.getElementById('work-overlay');
+  const countdownEl = document.getElementById('work-countdown');
+  const progressEl  = document.getElementById('work-daily-progress');
+  let seconds = remaining;
+  countdownEl.textContent = `💼 打工中... ${seconds}s`;
+  progressEl.textContent  = `今日打工收入：${G.workCoinsToday}/${GAME_CONFIG.workDailyCoinCap}🪙`;
+  overlay.classList.remove('hidden');
+  overlay.classList.add('work-visible');
+  workTimer = setInterval(() => {
+    seconds--;
+    countdownEl.textContent = `💼 打工中... ${seconds}s`;
+    if (seconds <= 0) {
+      clearInterval(workTimer);
+      workTimer = null;
+      finishWork();
+    }
+  }, 1000);
 }
 
 function startOuting(energyCost, countForThisOuting) {
@@ -594,6 +640,7 @@ function startOuting(energyCost, countForThisOuting) {
   G.outingStartedAt = Date.now();
   G._pendingOutingCount = countForThisOuting;
   saveState();
+  renderAll();
 
   document.getElementById('char-sprite-wrap').classList.add('char-hidden');
 
@@ -710,7 +757,7 @@ function closeReturnModal() {
     G.coins += reward.coins;
     G.mood   = clamp(G.mood + reward.moodGain, 0, 100);
     addBondExp(reward.bondExpGain);
-    G.dailyTasks.goOutDone = true;
+    if (G.goOutCountToday >= 2) G.dailyTasks.goOutDone = true;
 
     const entry = { date: todayStr(), text: event.text, rarity: event.rarity };
     if (event.img) entry.img = event.img;
@@ -754,6 +801,7 @@ function handleWorkClick() {
 function startWork() {
   G.workStartedAt = Date.now();
   saveState();
+  renderAll();
 
   const overlay     = document.getElementById('work-overlay');
   const countdownEl = document.getElementById('work-countdown');
@@ -871,11 +919,11 @@ function applyOutfitOverlay(outfitId) {
 
 /**
  * Alternate chew1/chew2 frames to create a chewing animation.
- * @param {string|null} afterExprKey — expression to restore after chewing ends
- *                                     (null = call renderAll to restore mood-based expr)
- * @param {number} duration — animation duration in ms (default 3000)
+ * @param {string|null} afterExprKey — expression to show after chewing ends (null = moodExpr)
+ * @param {number} holdDuration — ms to hold afterExprKey before reverting to moodExpr (0 = no revert)
+ * @param {number} chewDuration — chewing animation duration in ms (default 3000)
  */
-function startChewing(afterExprKey = null, duration = 3000) {
+function startChewing(afterExprKey = null, holdDuration = 0, chewDuration = 3000) {
   stopChewing();
   let frame = 0;
   _chewTimer = setInterval(() => {
@@ -884,9 +932,13 @@ function startChewing(afterExprKey = null, duration = 3000) {
   }, 350);
   _chewTimeout = setTimeout(() => {
     stopChewing();
-    if (afterExprKey) setCharExpression(afterExprKey);
-    else renderAll();
-  }, duration);
+    if (afterExprKey) {
+      setCharExpression(afterExprKey);
+      if (holdDuration > 0) setTimeout(() => renderAll(), holdDuration);
+    } else {
+      renderAll();
+    }
+  }, chewDuration);
 }
 
 function stopChewing() {
@@ -915,23 +967,31 @@ function renderAll() {
   if (bondBar) bondBar.style.width = `${bondBarPct}%`;
 
   const bondLevelStr = `Lv.${G.bondLevel}`;
-  document.getElementById('val-bond2').textContent  = bondLevelStr;
-  document.getElementById('bond-val').textContent   = bondLevelStr;
+  // const elBond2 = document.getElementById('val-bond2');
+  // if (elBond2) elBond2.textContent = bondLevelStr;
+  document.getElementById('bond-val').textContent = bondLevelStr;
 
   const bondExpInfoEl = document.getElementById('bond-exp-info');
+  const bondExpFillEl = document.getElementById('bond-exp-bar-fill');
   if (bondExpInfoEl) {
     if (G.bondLevel < GAME_CONFIG.bondLevelMax) {
-      bondExpInfoEl.textContent = `经验 ${G.bondExp} / ${bondExpMax}`;
+      bondExpInfoEl.textContent = `${G.bondExp} / ${bondExpMax}`;
+      if (bondExpFillEl) bondExpFillEl.style.width = `${bondBarPct}%`;
     } else {
-      bondExpInfoEl.textContent = '羁绊满级！';
+      bondExpInfoEl.textContent = '满级';
+      if (bondExpFillEl) bondExpFillEl.style.width = '100%';
     }
   }
 
-  document.getElementById('val-mood').textContent   = Math.round(G.mood);
-  document.getElementById('val-hunger').textContent = Math.round(G.hunger);
-  document.getElementById('val-energy').textContent = Math.round(G.energy);
-  document.getElementById('coin-val').textContent   = G.coins;
-  document.getElementById('coin-val2').textContent  = G.coins;
+  // const elMood   = document.getElementById('val-mood');
+  // const elHunger = document.getElementById('val-hunger');
+  // const elEnergy = document.getElementById('val-energy');
+  // const elCoin2  = document.getElementById('coin-val2');
+  // if (elMood)   elMood.textContent   = Math.round(G.mood);
+  // if (elHunger) elHunger.textContent = Math.round(G.hunger);
+  // if (elEnergy) elEnergy.textContent = Math.round(G.energy);
+  // if (elCoin2)  elCoin2.textContent  = G.coins;
+  document.getElementById('coin-val').textContent = G.coins;
   document.getElementById('mini-hunger-val').textContent = Math.round(G.hunger) + '%';
   document.getElementById('mini-energy-val').textContent = Math.round(G.energy) + '%';
   document.getElementById('mini-mood-val').textContent   = Math.round(G.mood)   + '%';
@@ -939,10 +999,10 @@ function renderAll() {
   if (!_chewTimer) setCharExpression(expr);
   applyOutfitOverlay(G.outfit);
 
-  document.getElementById('context-label').textContent =
-    G.outfit !== 'default' ? '打扮一下吧～' : randomFrom(CONTEXT_LABELS[expr]) || '';
-  document.getElementById('mood-tagline').textContent =
-    randomFrom(MOOD_TAGLINES[expr]) || '';
+  const outingBtn = document.getElementById('nav-outing');
+  const workBtn   = document.getElementById('nav-work');
+  if (outingBtn) outingBtn.disabled = !!G.outingStartedAt;
+  if (workBtn)   workBtn.disabled   = !!G.workStartedAt;
 }
 
 function setBar(stat, val) {
@@ -964,14 +1024,9 @@ function buildFoodGrid() {
     { type: 'special',  label: '特殊食物' },
   ];
 
-  groups.forEach(({ type, label }) => {
+  groups.forEach(({ type }) => {
     const items = FOODS.filter(f => f.type === type);
     if (items.length === 0) return;
-
-    const header = document.createElement('div');
-    header.className = 'food-group-header';
-    header.textContent = label;
-    grid.appendChild(header);
 
     items.forEach(food => {
       const div = document.createElement('div');
@@ -1164,16 +1219,16 @@ function buildTasksPanel() {
     },
     {
       key: 'feeds',
-      name: '今日投喂 1 次',
-      progress: `${Math.min(dt.feeds, 1)}/1`,
+      name: '今日投喂 3 次',
+      progress: `${Math.min(dt.feeds, 3)}/3`,
       done: dt.feedsClaimed,
-      canClaim: dt.feeds >= 1 && !dt.feedsClaimed,
+      canClaim: dt.feeds >= 3 && !dt.feedsClaimed,
       reward: `+${cfg.missionFeedCoins}🪙 +${cfg.missionFeedBondExp}羁绊经验`,
     },
     {
       key: 'goOut',
-      name: '今日外出 1 次',
-      progress: dt.goOutDone ? '已完成' : '0/1',
+      name: '今日外出 2 次',
+      progress: dt.goOutClaimed ? '已完成' : `${Math.min(G.goOutCountToday, 2)}/2`,
       done: dt.goOutClaimed,
       canClaim: dt.goOutDone && !dt.goOutClaimed,
       reward: `+${cfg.missionGoOutCoins}🪙 +${cfg.missionGoOutBondExp}羁绊经验`,
@@ -1216,7 +1271,7 @@ function claimTask(key) {
     addBondExp(cfg.missionLoginBondExp);
     toast(`登录签到 +${cfg.missionLoginCoins}🪙 +${cfg.missionLoginBondExp}羁绊经验`);
 
-  } else if (key === 'feeds' && dt.feeds >= 1 && !dt.feedsClaimed) {
+  } else if (key === 'feeds' && dt.feeds >= 3 && !dt.feedsClaimed) {
     dt.feedsClaimed = true;
     G.coins += cfg.missionFeedCoins;
     addBondExp(cfg.missionFeedBondExp);
@@ -1271,15 +1326,29 @@ function closePopup() {
 }
 
 // ──────────────────────────────────────────────
-//   SPEECH BUBBLE
+//   SPEECH / CONTEXT LABEL
 // ──────────────────────────────────────────────
-function showSpeech(text) {
-  const bubble = document.getElementById('speech-bubble');
-  const span   = document.getElementById('speech-text');
-  span.textContent = text;
-  bubble.classList.remove('hidden');
+function showSpeech(text, duration = 3200) {
+  const el = document.getElementById('context-label');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.remove('label-hidden');
   clearTimeout(speechTimer);
-  speechTimer = setTimeout(() => bubble.classList.add('hidden'), 3200);
+  speechTimer = setTimeout(() => el.classList.add('label-hidden'), duration);
+}
+
+// Randomly show an idle CONTEXT_LABELS line. Reschedules itself.
+function scheduleIdleChatter() {
+  const delay = 20000 + Math.random() * 40000; // 20–60 s
+  setTimeout(() => {
+    const el = document.getElementById('context-label');
+    if (el && el.classList.contains('label-hidden')) {
+      const expr = moodExpr();
+      const line = G.outfit !== 'default' ? '打扮一下吧～' : randomFrom(CONTEXT_LABELS[expr] || []);
+      if (line) showSpeech(line, 3000);
+    }
+    scheduleIdleChatter();
+  }, delay);
 }
 
 // ──────────────────────────────────────────────
@@ -1329,7 +1398,6 @@ function rand(a, b) { return Math.floor(Math.random() * (b - a + 1)) + a; }
 function randomFrom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 function todayStr() { return new Date().toLocaleDateString('zh-CN'); }
 function moodExpr() {
-  if (G.mood >= 80) return 'happy';
   if (G.mood >= 50) return 'normal';
   if (G.mood >= 20) return 'cold';
   return 'sad';

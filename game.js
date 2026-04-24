@@ -37,6 +37,7 @@ const defaultState = {
   workDate: '',
   onlineMoodGainedToday: 0,
   onlineMoodDate: '',
+  seenBondEvents: [],
   dailyTasks: {
     date: '',
     loginClaimed:  false,
@@ -195,8 +196,10 @@ const OUTING_DEPARTURE_MESSAGES = [
 ];
 
 // ─── Data: Outing events ──────────────────────
+// common  — always in the pool, text only, picked randomly
+// rare    — low probability (pity system), text + img in assets/outing/rare/
 const OUTING_EVENTS = [
-  // Common events (text-only)
+  // ── Common (text only) ───────────────────────
   { id:'c1', rarity:'common', text:'在街角遇见了一只流浪猫，喂了它小鱼干，它蹭了蹭我就跑走了。' },
   { id:'c2', rarity:'common', text:'买了杯奶茶，喝到一半发现是半糖，刚好。' },
   { id:'c3', rarity:'common', text:'路过书店翻了翻新书，没买，但心里很满足。' },
@@ -206,10 +209,21 @@ const OUTING_EVENTS = [
   { id:'c7', rarity:'common', text:'下雨了，躲进一家没去过的小店，老板泡了碗热茶，坐了很久。' },
   { id:'c8', rarity:'common', text:'路过一所小学，下课铃声响起，孩子们冲出来，把我也卷进了那个夏天。' },
   { id:'c9', rarity:'common', text:'在旧货市场发现了一盘旧磁带，不知道是谁的，带回来了。' },
-  // Rare events (text + user-provided img)
-  { id:'r1', rarity:'rare', text:'意外遇见了好久不见的老朋友，聊了整个下午，还拿到了一张合照。', img:'assets/outing/rare_friends.jpg' },
-  { id:'r2', rarity:'rare', text:'在街头驻足听了一位街头歌手表演，结束后他把手写歌词送给了我。', img:'assets/outing/rare_singer.jpg' },
-  { id:'r3', rarity:'rare', text:'找到了传说中的老字号小吃，排了一小时队，值了，真的值了。', img:'assets/outing/rare_food.jpg' },
+
+  // ── Rare (img in assets/outing/rare/) ────────
+  { id:'r1', rarity:'rare', text:'意外遇见了好久不见的老朋友，聊了整个下午，还拿到了一张合照。', img:'assets/outing/rare/rare_friends.jpg' },
+  { id:'r2', rarity:'rare', text:'在街头驻足听了一位街头歌手表演，结束后他把手写歌词送给了我。', img:'assets/outing/rare/rare_singer.jpg' },
+  { id:'r3', rarity:'rare', text:'找到了传说中的老字号小吃，排了一小时队，值了，真的值了。', img:'assets/outing/rare/rare_food.jpg' },
+];
+
+// ─── Data: Bond events ────────────────────────
+// Triggered when player reaches minBondLevel.
+// Shown immediately after level-up toast (5s delay), or on next page load if missed.
+// img lives in assets/outing/bond/
+// date: author-defined display date shown in diary (e.g. '2026年3月1日'), not trigger date.
+// To add: { id:'b1', minBondLevel:5, date:'2026年3月1日', text:'…', img:'assets/outing/bond/b1.jpg' }
+const BOND_EVENTS = [
+  { id:'b1', minBondLevel:2, date:'2025年7月20日', text:'第一次站上这么大的舞台！', img:'assets/outing/bond/yancheng_yyj.png' },
 ];
 
 // ══════════════════════════════════════════════
@@ -222,6 +236,7 @@ window.addEventListener('DOMContentLoaded', () => {
   handleDailyLogin();
   resumeOutingIfNeeded();
   resumeWorkIfNeeded();
+  checkMissedBondEvents();
   buildFoodGrid();
   buildOutfitGrid();
   buildMemoryList();
@@ -255,6 +270,9 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Start idle chatter — randomly shows CONTEXT_LABELS lines when label is hidden
   scheduleIdleChatter();
+
+  // Online mood regen visual indicator
+  scheduleMoodRegenTip();
 });
 
 // ──────────────────────────────────────────────
@@ -385,6 +403,11 @@ function addBondExp(amount) {
 function grantLevelUpReward() {
   G.coins += GAME_CONFIG.levelUpRewardCoins;
   toast(`🎉 羁绊 Lv.${G.bondLevel}！+${GAME_CONFIG.levelUpRewardCoins}🪙`);
+  const level = G.bondLevel;
+  setTimeout(() => {
+    const event = BOND_EVENTS.find(e => e.minBondLevel === level && !(G.seenBondEvents || []).includes(e.id));
+    if (event) showBondEventModal(event);
+  }, 5000);
 }
 
 // ──────────────────────────────────────────────
@@ -606,6 +629,13 @@ function resumeOutingIfNeeded() {
   }, 1000);
 }
 
+function setWorkProgressRing(elapsedSeconds) {
+  const ring = document.getElementById('work-progress-ring');
+  if (!ring) return;
+  const pct = Math.min(elapsedSeconds / GAME_CONFIG.workDurationSeconds * 100, 100);
+  ring.style.setProperty('--work-pct', `${pct}%`);
+}
+
 function resumeWorkIfNeeded() {
   if (!G.workStartedAt) return;
   const elapsed = Math.floor((Date.now() - G.workStartedAt) / 1000);
@@ -614,18 +644,12 @@ function resumeWorkIfNeeded() {
     finishWork();
     return;
   }
-  const overlay     = document.getElementById('work-overlay');
-  const countdownEl = document.getElementById('work-countdown');
-  const progressEl  = document.getElementById('work-daily-progress');
-  let seconds = remaining;
-  countdownEl.textContent = `💼 打工中... ${seconds}s`;
-  progressEl.textContent  = `今日打工收入：${G.workCoinsToday}/${GAME_CONFIG.workDailyCoinCap}🪙`;
-  overlay.classList.remove('hidden');
-  overlay.classList.add('work-visible');
+  let elapsedSec = elapsed;
+  setWorkProgressRing(elapsedSec);
   workTimer = setInterval(() => {
-    seconds--;
-    countdownEl.textContent = `💼 打工中... ${seconds}s`;
-    if (seconds <= 0) {
+    elapsedSec++;
+    setWorkProgressRing(elapsedSec);
+    if (elapsedSec >= GAME_CONFIG.workDurationSeconds) {
       clearInterval(workTimer);
       workTimer = null;
       finishWork();
@@ -682,7 +706,6 @@ function finishOuting() {
 
 function pickOutingEvent() {
   const isRare = Math.random() < rareEventChance();
-
   if (isRare) {
     G.rareFailCount = 0;
     const rares = OUTING_EVENTS.filter(e => e.rarity === 'rare');
@@ -713,6 +736,59 @@ function calcOutingReward(outingCount) {
   const bondExpGain = rand(...GAME_CONFIG.goOutBaseBondExpRange);
 
   return { coins, moodGain, bondExpGain };
+}
+
+// ──────────────────────────────────────────────
+//   BOND EVENT — MISSED / CATCH-UP
+// ──────────────────────────────────────────────
+function checkMissedBondEvents() {
+  if (!BOND_EVENTS.length) return;
+  const seen = G.seenBondEvents || [];
+  const missed = BOND_EVENTS
+    .filter(e => e.minBondLevel <= G.bondLevel && !seen.includes(e.id))
+    .sort((a, b) => a.minBondLevel - b.minBondLevel);
+  if (missed.length === 0) return;
+  // Show one per session, after a short delay so the UI has settled
+  setTimeout(() => showBondEventModal(missed[0]), 1500);
+}
+
+// ──────────────────────────────────────────────
+//   BOND EVENT MODAL
+// ──────────────────────────────────────────────
+let _pendingBondEvent = null;
+
+function showBondEventModal(event) {
+  _pendingBondEvent = event;
+  document.getElementById('return-modal-title').textContent = '🎀 羁绊记忆';
+  const eventArea = document.getElementById('return-event-area');
+  if (event.img) {
+    eventArea.innerHTML = `
+      <img class="return-event-img" src="${event.img}" alt=""
+           onerror="this.style.display='none'">
+      <div class="return-event-text">${event.text}</div>
+    `;
+  } else {
+    eventArea.innerHTML = `<div class="return-event-text">${event.text}</div>`;
+  }
+  document.getElementById('return-reward-area').classList.add('hidden');
+  document.getElementById('return-close-btn').onclick = closeBondEventModal;
+  document.getElementById('outing-return-modal').classList.remove('hidden');
+}
+
+function closeBondEventModal() {
+  const event = _pendingBondEvent;
+  if (event) {
+    if (!G.seenBondEvents) G.seenBondEvents = [];
+    G.seenBondEvents.push(event.id);
+    G.diary.unshift({ date: event.date || todayStr(), text: event.text, ...(event.img ? { img: event.img } : {}), rarity: 'bond', bondEventId: event.id });
+    if (G.diary.length > 100) G.diary.pop();
+    saveState();
+    renderDiaryPanel();
+  }
+  _pendingBondEvent = null;
+  document.getElementById('return-modal-title').textContent = '📔 外出归来';
+  document.getElementById('return-close-btn').onclick = closeReturnModal;
+  document.getElementById('outing-return-modal').classList.add('hidden');
 }
 
 function showReturnModal(event, baseReward, isRare) {
@@ -803,21 +879,12 @@ function startWork() {
   saveState();
   renderAll();
 
-  const overlay     = document.getElementById('work-overlay');
-  const countdownEl = document.getElementById('work-countdown');
-  const progressEl  = document.getElementById('work-daily-progress');
-  let seconds = GAME_CONFIG.workDurationSeconds;
-
-  countdownEl.textContent = `💼 打工中... ${seconds}s`;
-  progressEl.textContent  = `今日打工收入：${G.workCoinsToday}/${GAME_CONFIG.workDailyCoinCap}🪙`;
-
-  overlay.classList.remove('hidden');
-  requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('work-visible')));
-
+  let elapsedSec = 0;
+  setWorkProgressRing(0);
   workTimer = setInterval(() => {
-    seconds--;
-    countdownEl.textContent = `💼 打工中... ${seconds}s`;
-    if (seconds <= 0) {
+    elapsedSec++;
+    setWorkProgressRing(elapsedSec);
+    if (elapsedSec >= GAME_CONFIG.workDurationSeconds) {
       clearInterval(workTimer);
       workTimer = null;
       finishWork();
@@ -826,10 +893,7 @@ function startWork() {
 }
 
 function finishWork() {
-  const overlay = document.getElementById('work-overlay');
-  overlay.classList.remove('work-visible');
-  setTimeout(() => overlay.classList.add('hidden'), 300);
-
+  setWorkProgressRing(0);
   G.workStartedAt = null;
 
   const remaining = GAME_CONFIG.workDailyCoinCap - G.workCoinsToday;
@@ -1133,23 +1197,72 @@ function renderDiaryPanel() {
   if (!el) return;
   el.innerHTML = '';
 
-  // Only show rare events (those with a photo)
-  const rareEntries = G.diary.filter(d => d.img);
-  if (rareEntries.length === 0) {
+  const outingEntries = G.diary.filter(d => d.rarity !== 'bond' && d.img);
+  const bondEntries   = G.diary.filter(d => d.rarity === 'bond')
+    .sort((a, b) => {
+      // Sort by minBondLevel via BOND_EVENTS lookup, fallback to diary order
+      const la = BOND_EVENTS.find(e => e.id === a.bondEventId)?.minBondLevel ?? 0;
+      const lb = BOND_EVENTS.find(e => e.id === b.bondEventId)?.minBondLevel ?? 0;
+      return la - lb;
+    });
+
+  const hasOuting = outingEntries.length > 0;
+  const hasBond   = bondEntries.length > 0;
+
+  if (!hasOuting && !hasBond) {
     el.innerHTML = '<div class="empty-msg">📷 还没有珍贵回忆，多去外出探险吧～</div>';
     return;
   }
 
-  rareEntries.forEach(d => {
-    const div = document.createElement('div');
-    div.className = 'diary-thumb';
-    div.innerHTML = `
-      <img class="diary-thumb-img" src="${d.img}" alt="" onerror="this.style.display='none'">
-      <div class="diary-thumb-date">${d.date}</div>
-    `;
-    div.addEventListener('click', () => openDiaryDetail(d));
-    el.appendChild(div);
-  });
+  // ── Section: Outing photos ──
+  if (hasOuting) {
+    const section = document.createElement('div');
+    section.className = 'diary-section';
+    section.innerHTML = '<div class="diary-section-title">📷 外出记忆</div>';
+    const grid = document.createElement('div');
+    grid.className = 'diary-thumb-grid';
+    outingEntries.forEach(d => {
+      const div = document.createElement('div');
+      div.className = 'diary-thumb';
+      div.innerHTML = `
+        <img class="diary-thumb-img" src="${d.img}" alt="" onerror="this.style.display='none'">
+        <div class="diary-thumb-date">${d.date}</div>
+      `;
+      div.addEventListener('click', () => openDiaryDetail(d));
+      grid.appendChild(div);
+    });
+    section.appendChild(grid);
+    el.appendChild(section);
+  }
+
+  // ── Section: Bond timeline ──
+  if (hasBond) {
+    const section = document.createElement('div');
+    section.className = 'diary-section';
+    section.innerHTML = '<div class="diary-section-title">🎀 羁绊时间轴</div>';
+    const timeline = document.createElement('div');
+    timeline.className = 'bond-timeline';
+    bondEntries.forEach(d => {
+      const item = document.createElement('div');
+      item.className = 'bond-timeline-item';
+      const level = BOND_EVENTS.find(e => e.id === d.bondEventId)?.minBondLevel;
+      item.innerHTML = `
+        <div class="bond-timeline-dot"></div>
+        <div class="bond-timeline-body" ${d.img ? 'style="cursor:pointer"' : ''}>
+          <div class="bond-timeline-meta">
+            ${level ? `<span class="bond-timeline-lv">Lv.${level}</span>` : ''}
+            <span class="bond-timeline-date">${d.date}</span>
+          </div>
+          <div class="bond-timeline-text diary-handwriting">${d.text}</div>
+          ${d.img ? `<img class="bond-timeline-img" src="${d.img}" alt="" onerror="this.style.display='none'">` : ''}
+        </div>
+      `;
+      if (d.img) item.querySelector('.bond-timeline-body').addEventListener('click', () => openDiaryDetail(d));
+      timeline.appendChild(item);
+    });
+    section.appendChild(timeline);
+    el.appendChild(section);
+  }
 }
 
 function openDiaryDetail(d) {
@@ -1335,6 +1448,29 @@ function showSpeech(text, duration = 3200) {
   el.classList.remove('label-hidden');
   clearTimeout(speechTimer);
   speechTimer = setTimeout(() => el.classList.add('label-hidden'), duration);
+}
+
+// Show floating mood regen tip if daily cap not yet reached. Reschedules itself.
+function scheduleMoodRegenTip() {
+  const delay = 2000 + Math.random() * 1000; // 2–3 s
+  setTimeout(() => {
+    const equippedOutfit = getEquippedBondOutfitEffect();
+    const capBonus = equippedOutfit === 'COIN_OUTFIT_MOOD_CAP' ? GAME_CONFIG.coinOutfitMoodCapBonus : 0;
+    const dailyCap = GAME_CONFIG.onlineMoodDailyCap + capBonus;
+    if (G.onlineMoodGainedToday < dailyCap && G.mood < 100) {
+      const tip = document.getElementById('mood-regen-tip');
+      if (tip) {
+        tip.textContent = '+';
+        tip.classList.remove('hidden');
+        // Restart animation by removing and re-adding
+        tip.style.animation = 'none';
+        void tip.offsetWidth;
+        tip.style.animation = '';
+        setTimeout(() => tip.classList.add('hidden'), 2000);
+      }
+    }
+    scheduleMoodRegenTip();
+  }, delay);
 }
 
 // Randomly show an idle CONTEXT_LABELS line. Reschedules itself.

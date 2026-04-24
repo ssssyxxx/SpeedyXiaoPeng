@@ -53,11 +53,12 @@
         <span class="stat-emoji" style="display:none">⚡</span>
         <span id="mini-energy-val">0</span>
       </span>
-      <span class="mini-stat">
+      <span class="mini-stat" style="position:relative">
         <img src="assets/ui/stat_mood.png" class="stat-icon-img" alt=""
              onerror="this.style.display='none';this.nextElementSibling.style.display='inline'">
         <span class="stat-emoji" style="display:none">🩷</span>
         <span id="mini-mood-val">0</span>
+        <span id="mood-regen-tip" class="mood-regen-tip hidden"></span>
       </span>
     </div>
 
@@ -107,12 +108,6 @@
       <div id="outing-countdown"></div>
     </div>
 
-    <!-- ── Work Overlay (shown while working) ── -->
-    <div id="work-overlay" class="hidden">
-      <div id="work-countdown"></div>
-      <div id="work-daily-progress"></div>
-    </div>
-
     <!-- ── Bottom Nav Plank ── -->
     <nav id="bottom-nav">
       <div id="nav-plank">
@@ -135,8 +130,10 @@
         </button>
 
         <button class="nav-btn" id="nav-work" onclick="handleWorkClick()">
-          <div class="nav-icon-bg">
-            <span class="nav-emoji" style="display:flex">💼</span>
+          <div class="work-progress-ring" id="work-progress-ring">
+            <div class="nav-icon-bg">
+              <span class="nav-emoji" style="display:flex">💼</span>
+            </div>
           </div>
           <span class="nav-label">打工</span>
         </button>
@@ -214,7 +211,7 @@
     <!-- Outing Return Modal -->
     <div id="outing-return-modal" class="popup-overlay hidden">
       <div class="popup-card">
-        <div class="return-modal-title">📔 外出归来</div>
+        <div class="return-modal-title" id="return-modal-title">📔 外出归来</div>
         <div id="return-event-area" class="return-event-area"></div>
         <div id="return-reward-area" class="return-reward-area hidden"></div>
         <button class="popup-confirm-btn" id="return-close-btn" onclick="closeReturnModal()">收下啦 ✓</button>

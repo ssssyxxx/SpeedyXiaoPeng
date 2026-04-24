@@ -54,7 +54,35 @@ Migrations must be **idempotent** — running them twice must produce the same r
 
 ---
 
-## 2. Summary
+## 2. Browser Cache Busting on Every Release
+
+**Rule:** Every time new code is deployed, the version query parameter on all JS and CSS references in `index.html` must be updated. This forces browsers to re-download the new files instead of serving stale cached versions.
+
+### How it works today
+
+`index.html` loads assets with a version suffix:
+
+```html
+<link rel="stylesheet" href="style.css?v=20260423" />
+<script src="outfits.js?v=20260423"></script>
+<script src="game.js?v=20260423"></script>
+```
+
+`index.html` itself is not aggressively cached by browsers, so it is always fetched fresh. The version parameter on the other files ensures browsers treat them as new URLs and bypass the cache.
+
+### Rules for every release
+
+1. **Update `?v=YYYYMMDD` on all three asset references** in `index.html` before deploying. Use the release date.
+2. **Only `index.html` needs to change** — the JS and CSS filenames stay the same; the query string is enough to bust the cache.
+3. **Do not skip this step even for small changes.** A one-line JS fix served from an old cached file will appear to do nothing for returning users.
+
+### Why this matters
+
+localStorage data and browser cache are independent. Clearing browser cache does **not** delete localStorage (game saves). Users can safely hard-refresh or clear cache without losing progress — but they should not have to. Proper versioning prevents the problem entirely.
+
+---
+
+## 3. Summary
 
 | Action | Allowed? |
 |---|---|

@@ -119,7 +119,7 @@ const EXPRESSION_SPRITES = {
   sad:         'char_sad.png',
   disgusted:   'char_disgusted.png',
   pouty_tired: 'char_pouty_tired.png',
-  pouty_mood:  'char_pouty_mood.png',
+  pouty_mood:  'char_sad.png',
   chew1:       'char_chew1.png',
   chew2:       'char_chew2.png',
 };
@@ -595,7 +595,7 @@ function handleOutingClick() {
 
 function showOutingBlocked(reason) {
   const text = randomFrom(OUTING_BLOCKED_DIALOGUES);
-  const exprKey = reason === 'tired' ? 'pouty_tired' : 'char_sad';
+  const exprKey = reason === 'tired' ? 'pouty_tired' : 'pouty_mood';
   setCharExpression(exprKey);
   showSpeech(text, 3000);
   setTimeout(() => renderAll(), 3000);

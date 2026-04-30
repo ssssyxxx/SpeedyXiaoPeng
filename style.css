@@ -927,11 +927,11 @@ body {
 }
 .diary-thumb-date {
   font-size: 10px;
-  color: #c0a060;
+  color: #ffffff;
   font-weight: 600;
   text-align: center;
   padding: 5px 4px;
-  background: rgba(0,0,0,0.35);
+  background: rgba(124, 204, 238, 0.867);
 }
 
 /* ── Diary detail modal ── */

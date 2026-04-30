@@ -82,7 +82,27 @@ localStorage data and browser cache are independent. Clearing browser cache does
 
 ---
 
-## 3. Summary
+## 3. ID-Based Persistence for All Game Entities
+
+**Rule:** All game entities — outfits, foods, outing events, bond events, and any future collectibles — must be saved and referenced exclusively by their `id` field. Text, images, prices, and other display properties must never be used as keys or stored as permanent identifiers.
+
+### Why
+
+- `id` values are stable. Text and image paths change as content is updated.
+- Diary entries, unlock records, and collection state that key on `id` remain valid after any content edit to `outfits.js`, `foods.js`, or `outings.js`.
+- Keying on text caused a regression: when rare event text was edited, stored diary entries could no longer match the current event, losing image resolution.
+
+### Rules
+
+1. **Every entity must have a unique, permanent `id`.** Once assigned and shipped, an `id` must never be changed or reused — it is the identity of that entity in all saves.
+2. **Save only the `id` to localStorage.** Unlock state, collection records, diary references, and pity counters store the `id`; all other fields are looked up at runtime from the config.
+3. **Derive display data at render time.** Text, images, prices, and names are always read from the live config (e.g. `OUTING_EVENTS.find(e => e.id === storedId)`), never from the saved snapshot.
+4. **Diary entries for outing/bond events must include `eventId`.** This allows retroactive content updates (text edits, image path changes) to be reflected without clearing saves.
+5. **Do not key on text, emoji, image path, or name.** These are display properties and may be updated freely as long as `id` stays the same.
+
+---
+
+## 4. Summary
 
 | Action | Allowed? |
 |---|---|

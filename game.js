@@ -53,9 +53,11 @@ const GAME_CONFIG = {
   // Stats
   hungerMax: 100, moodMax: 100, energyMax: 100,
   // Decay / regen per tick (1 tick = 1 game-hour)
-  hungerDecayPerHour:           6,
+  hungerDecayPerHour:           4,
   moodDecayTriggerHunger:       30,
-  moodDecayPerHourWhenHungry:   4,
+  moodDecayPerHourWhenHungry:   2,
+  moodRegenPerHour:             2,   // mood regen when hunger >= moodRegenMinHunger
+  moodRegenMinHunger:           30,
   energyRegenPerHour:           5,
   lowHungerEnergyRegenMult:     0.5,
   lowHungerThreshold:           30,
@@ -88,13 +90,15 @@ const GAME_CONFIG = {
   moodCoinMult90:         1.25,
   // Work
   workDurationSeconds: 45,
-  workCoinRange:       [10, 15],
-  workBondExp:         2,
+  workCoinRange:       [15, 20],
+  workBondExp:         0,
   workDailyMaxTimes:   12,
-  workDailyCoinCap:    150,
+  workDailyCoinCap:    180,
   // Online mood regen
-  onlineMoodGainPerMin:    0.2,
-  onlineMoodDailyCap:      15,
+  onlineMoodGainPerMin:    0.5,
+  onlineMoodDailyCap:      25,
+  // Daily free food (applied automatically on first login each day)
+  dailyFreeFoodHunger:     30,
   coinOutfitMoodCapBonus:  5,
   // Bond level
   bondLevelMax:    40,
@@ -136,24 +140,7 @@ let _chewTimer   = null; // chewing animation interval
 let _chewTimeout = null; // chewing animation stop timeout
 
 // ─── Data: Foods ──────────────────────────────
-const FOODS = [
-  // ─── Normal (daily maintenance) ───────────────
-  { id:'normal_bento',     name:'便当',     type:'normal',    price:20,  emoji:'🍱', hunger:30, mood: 1 },
-  { id:'normal_home_meal', name:'家常菜',   type:'normal',    price:30,  emoji:'🍲', hunger:40, mood: 2 },
-  { id:'normal_big_set',   name:'大套餐',   type:'normal',    price:42,  emoji:'🍛', hunger:55, mood: 3 },
-  // ─── Favorite (mood boost) ────────────────────
-  { id:'fav_dessert',      name:'甜点',     type:'favorite',  price:55,  emoji:'🍰', hunger:20, mood:12 },
-  { id:'fav_bbq',          name:'烤肉',     type:'favorite',  price:75,  emoji:'🍖', hunger:35, mood:16 },
-  { id:'fav_luxury_meal',  name:'豪华套餐', type:'favorite',  price:100, emoji:'🦞', hunger:45, mood:22 },
-  // ─── Disliked (cheap survival, mood penalty) ──
-  { id:'dislike_bread',      name:'白面包',  type:'disliked', price:12,  emoji:'🍞', hunger:25, mood:-6  },
-  { id:'dislike_canned',     name:'罐头',    type:'disliked', price:18,  emoji:'🥫', hunger:35, mood:-8  },
-  { id:'dislike_cold_rice',  name:'冷米饭',  type:'disliked', price:25,  emoji:'🍚', hunger:45, mood:-10 },
-  // ─── Special (dev-added, event drops only) ────
-  { id:'perf_sweet',    name:'演出甜品', type:'special', price:0, emoji:'⭐', hunger:15, mood:30, special:true },
-  { id:'holiday_cake',  name:'节日蛋糕', type:'special', price:0, emoji:'🎂', hunger:15, mood:30, special:true },
-];
-
+// FOODS is loaded from foods.js (must be included before game.js in HTML)
 // OUTFITS_CONFIG is loaded from outfits.js (must be included before game.js in HTML)
 
 // ─── Data: Dialogue ────────────────────────────
@@ -173,58 +160,8 @@ const CONTEXT_LABELS = {
 };
 
 
-// ─── Data: Outing blocked dialogues ──────────
-const OUTING_BLOCKED_DIALOGUES = [
-  '小猪好累，不想出门 😴',
-  '人家今天不想动嘛～',
-  '呜呜，走不动了啦…',
-  '再让我躺一会儿嘛！',
-  '心情不好，不要出门啦',
-  '好累哦，让我休息一下嘛～',
-  '现在不想出去，陪陪我嘛 🥺',
-];
-
-// ─── Data: Outing departure messages ─────────
-const OUTING_DEPARTURE_MESSAGES = [
-  '出门啦，帮我照看一下两只猫猫 🐱',
-  '去逛逛，一会儿回来～',
-  '出去买点东西，很快的！',
-  '外面天气不错，去透透气～',
-  '溜出去一下，别找我哦 🎵',
-  '出门啦，记得等我回来！',
-  '去外面走走，马上就回来～',
-];
-
-// ─── Data: Outing events ──────────────────────
-// common  — always in the pool, text only, picked randomly
-// rare    — low probability (pity system), text + img in assets/outing/rare/
-const OUTING_EVENTS = [
-  // ── Common (text only) ───────────────────────
-  { id:'c1', rarity:'common', text:'在街角遇见了一只流浪猫，喂了它小鱼干，它蹭了蹭我就跑走了。' },
-  { id:'c2', rarity:'common', text:'买了杯奶茶，喝到一半发现是半糖，刚好。' },
-  { id:'c3', rarity:'common', text:'路过书店翻了翻新书，没买，但心里很满足。' },
-  { id:'c4', rarity:'common', text:'坐公交时，旁边小朋友在画画，画得很好看，我们比了一个大拇指。' },
-  { id:'c5', rarity:'common', text:'在超市碰到了打折，买了一堆零食，背包沉甸甸的。' },
-  { id:'c6', rarity:'common', text:'在公园找到一张没人要的素描，画的是一棵老树，带回来了。' },
-  { id:'c7', rarity:'common', text:'下雨了，躲进一家没去过的小店，老板泡了碗热茶，坐了很久。' },
-  { id:'c8', rarity:'common', text:'路过一所小学，下课铃声响起，孩子们冲出来，把我也卷进了那个夏天。' },
-  { id:'c9', rarity:'common', text:'在旧货市场发现了一盘旧磁带，不知道是谁的，带回来了。' },
-
-  // ── Rare (img in assets/outing/rare/) ────────
-  { id:'r1', rarity:'rare', text:'意外遇见了好久不见的老朋友，聊了整个下午，还拿到了一张合照。', img:'assets/outing/rare/rare_friends.jpg' },
-  { id:'r2', rarity:'rare', text:'在街头驻足听了一位街头歌手表演，结束后他把手写歌词送给了我。', img:'assets/outing/rare/rare_singer.jpg' },
-  { id:'r3', rarity:'rare', text:'找到了传说中的老字号小吃，排了一小时队，值了，真的值了。', img:'assets/outing/rare/rare_food.jpg' },
-];
-
-// ─── Data: Bond events ────────────────────────
-// Triggered when player reaches minBondLevel.
-// Shown immediately after level-up toast (5s delay), or on next page load if missed.
-// img lives in assets/outing/bond/
-// date: author-defined display date shown in diary (e.g. '2026年3月1日'), not trigger date.
-// To add: { id:'b1', minBondLevel:5, date:'2026年3月1日', text:'…', img:'assets/outing/bond/b1.jpg' }
-const BOND_EVENTS = [
-  { id:'b1', minBondLevel:2, date:'2025年7月20日', text:'第一次站上这么大的舞台！', img:'assets/outing/bond/yancheng_yyj.png' },
-];
+// OUTING_BLOCKED_DIALOGUES, OUTING_DEPARTURE_MESSAGES, OUTING_EVENTS, BOND_EVENTS
+// are loaded from outings.js (must be included before game.js in HTML)
 
 // ══════════════════════════════════════════════
 //   INIT
@@ -291,9 +228,11 @@ function tickHour(silent = false) {
   // Hunger decay
   G.hunger = clamp(G.hunger - GAME_CONFIG.hungerDecayPerHour, 0, 100);
 
-  // Mood decay — only when hunger is low
+  // Mood decay when hungry; regen when full enough
   if (G.hunger < GAME_CONFIG.moodDecayTriggerHunger) {
     G.mood = clamp(G.mood - GAME_CONFIG.moodDecayPerHourWhenHungry, 0, 100);
+  } else if (G.hunger >= GAME_CONFIG.moodRegenMinHunger) {
+    G.mood = clamp(G.mood + GAME_CONFIG.moodRegenPerHour, 0, 100);
   }
 
   // Energy regen (halved when hunger low)
@@ -344,6 +283,9 @@ function handleDailyLogin() {
   const today = todayStr();
   if (G.lastLogin === today) return;
   G.lastLogin = today;
+
+  // Daily free food — applied automatically to prevent starvation lock
+  G.hunger = clamp(G.hunger + GAME_CONFIG.dailyFreeFoodHunger, 0, 100);
 
   // Mark login task as claimable
   G.dailyTasks.loginClaimed = false;
@@ -835,7 +777,7 @@ function closeReturnModal() {
     addBondExp(reward.bondExpGain);
     if (G.goOutCountToday >= 2) G.dailyTasks.goOutDone = true;
 
-    const entry = { date: todayStr(), text: event.text, rarity: event.rarity };
+    const entry = { date: todayStr(), text: event.text, rarity: event.rarity, eventId: event.id };
     if (event.img) entry.img = event.img;
     G.diary.unshift(entry);
     if (G.diary.length > 100) G.diary.pop();
@@ -920,6 +862,7 @@ function finishWork() {
 //   INTERACT (聊天 / tap)
 // ──────────────────────────────────────────────
 function interact() {
+  if (G.outingStartedAt) return;
   const expr  = moodExpr();
   const lines = DIALOGUES[expr];
   const line  = randomFrom(lines);
@@ -1099,12 +1042,15 @@ function buildFoodGrid() {
       const moodSign  = food.mood >= 0 ? `+${food.mood}` : `${food.mood}`;
       const moodColor = food.mood >= 0 ? '#ff6b9d' : '#e74c3c';
 
+      const imgHTML = food.img
+        ? `<img class="food-img" src="${food.img}" alt="${food.name}"
+                onerror="this.replaceWith(Object.assign(document.createElement('div'), {
+                  className:'food-img food-emoji', textContent:'${food.emoji}'
+                }))" />`
+        : `<div class="food-img food-emoji">${food.emoji}</div>`;
+
       div.innerHTML = `
-        <img class="food-img" src="assets/food/food_${food.id}.png" alt="${food.name}"
-             onerror="this.replaceWith(Object.assign(document.createElement('div'), {
-               className:'food-img', style:'font-size:36px;line-height:60px;text-align:center',
-               textContent:'${food.emoji}'
-             }))" />
+        ${imgHTML}
         <span class="food-name">${food.name}</span>
         <span class="food-bonus" style="color:#ffb347">🍚+${food.hunger}</span>
         <span class="food-bonus" style="color:${moodColor}">🩷${moodSign}</span>
@@ -1197,7 +1143,21 @@ function renderDiaryPanel() {
   if (!el) return;
   el.innerHTML = '';
 
-  const outingEntries = G.diary.filter(d => d.rarity !== 'bond' && d.img);
+  // Merge stored diary entry with live OUTING_EVENTS data.
+  // eventId entries: always use current text + img from config (editable without clearing saves).
+  // Legacy entries (no eventId): keep stored snapshot as-is.
+  const resolveEntry = d => {
+    if (d.eventId) {
+      const live = OUTING_EVENTS.find(e => e.id === d.eventId);
+      if (live) return { ...d, text: live.text, img: live.img || null };
+    }
+    return { ...d, img: d.img || null };
+  };
+
+  const outingEntries = G.diary
+    .filter(d => d.rarity !== 'bond')
+    .map(resolveEntry)
+    .filter(d => d.img);
   const bondEntries   = G.diary.filter(d => d.rarity === 'bond')
     .sort((a, b) => {
       // Sort by minBondLevel via BOND_EVENTS lookup, fallback to diary order
@@ -1478,7 +1438,7 @@ function scheduleIdleChatter() {
   const delay = 20000 + Math.random() * 40000; // 20–60 s
   setTimeout(() => {
     const el = document.getElementById('context-label');
-    if (el && el.classList.contains('label-hidden')) {
+    if (el && el.classList.contains('label-hidden') && !G.outingStartedAt) {
       const expr = moodExpr();
       const line = G.outfit !== 'default' ? '打扮一下吧～' : randomFrom(CONTEXT_LABELS[expr] || []);
       if (line) showSpeech(line, 3000);
